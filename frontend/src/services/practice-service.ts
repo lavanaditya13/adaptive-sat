@@ -6,6 +6,7 @@ import {
     SubmitAnswerRequest,
     SubmitAnswerResponse,
     CompleteSessionResponse,
+    SessionResultsResponse,
 } from '../types/api';
 
 export const practiceService = {
@@ -31,6 +32,13 @@ export const practiceService = {
     completeSession: async (sessionId: string): Promise<CompleteSessionResponse> => {
         const response = await apiClient.post<CompleteSessionResponse>(
             API_ENDPOINTS.STUDENT.COMPLETE(sessionId)
+        );
+        return response.data;
+    },
+
+    getSessionResults: async (sessionId: string): Promise<SessionResultsResponse> => {
+        const response = await apiClient.get<SessionResultsResponse>(
+            API_ENDPOINTS.STUDENT.RESULTS(sessionId)
         );
         return response.data;
     },

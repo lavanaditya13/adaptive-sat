@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { RecentSession } from '../../types/api';
+import { ROUTES } from '../../constants/routes';
 
 interface RecentSessionsListProps {
     sessions: RecentSession[];
@@ -53,7 +54,7 @@ export function RecentSessionsList({ sessions }: RecentSessionsListProps) {
                 {sessions.map((session) => (
                     <Link
                         key={session.id}
-                        href={`/results/${session.id}`}
+                        href={ROUTES.SESSION_RESULTS(session.id)}
                         className="flex items-center justify-between px-5 py-4 hover:bg-slate-800/30 transition-colors group"
                     >
                         <div className="flex items-center gap-4 min-w-0">

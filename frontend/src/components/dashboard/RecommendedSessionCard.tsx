@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { RecommendedSession } from '../../types/api';
+import { ROUTES } from '../../constants/routes';
 
 interface RecommendedSessionCardProps {
     session: RecommendedSession;
@@ -41,7 +42,7 @@ export function RecommendedSessionCard({ session }: RecommendedSessionCardProps)
                     </div>
 
                     <Link
-                        href={`/practice?topic=${session.id}`}
+                        href={ROUTES.PRACTICE_SESSION(session.id)}
                         className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-all duration-200 shadow-sm shadow-indigo-600/20 hover:shadow-indigo-500/30 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900"
                     >
                         Start Practice
