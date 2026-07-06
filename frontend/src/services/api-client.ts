@@ -1,5 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { tokenStore } from './tokenStore';
+import { useAuthStore } from '../store/auth-store';
+import { API_ENDPOINTS } from '../constants/api-endpoints';
 import { RefreshResponse } from '../types/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api/v1';
@@ -14,7 +15,7 @@ export const apiClient = axios.create({
 // Request interceptor to attach the access token
 apiClient.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-        const token = tokenStore.getAccessToken();
+        const token = useAuthStore.getState().accessToken;
         if (token && config.headers) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -29,7 +30,7 @@ apiClient.interceptors.request.use(
 let isRefreshing = false;
 let failedQueue: Array<{
     resolve: (value: string | PromiseLike<string>) => void;
-    reject: (reason?: unknown) => void;
+    reject: (reason: unknown) => void;
 }> = [];
 
 const processQueue = (error: Error | null, token: string | null = null) => {
@@ -57,10 +58,10 @@ apiClient.interceptors.response.use(
         if (error.response?.status === 401 && !originalRequest._retry) {
             // Don't try to refresh if the request was to login/signup/refresh/logout
             const isAuthEndpoint =
-                originalRequest.url?.includes('/auth/login') ||
-                originalRequest.url?.includes('/auth/signup') ||
-                originalRequest.url?.includes('/auth/refresh') ||
-                originalRequest.url?.includes('/auth/logout');
+                originalRequest.url?.includes(API_ENDPOINTS.AUTH.LOGIN) ||
+                originalRequest.url?.includes(API_ENDPOINTS.AUTH.SIGNUP) ||
+                originalRequest.url?.includes(API_ENDPOINTS.AUTH.REFRESH) ||
+                originalRequest.url?.includes(API_ENDPOINTS.AUTH.LOGOUT);
 
             if (isAuthEndpoint) {
                 return Promise.reject(error);
@@ -84,23 +85,23 @@ apiClient.interceptors.response.use(
             originalRequest._retry = true;
             isRefreshing = true;
 
-            const refreshToken = tokenStore.getRefreshToken();
+            const refreshToken = useAuthStore.getState().refreshToken;
             if (!refreshToken) {
                 isRefreshing = false;
-                tokenStore.clearTokens();
+                useAuthStore.getState().logout();
                 return Promise.reject(error);
             }
 
             try {
                 // Call refresh endpoint directly using axios to avoid interceptor loop
                 const response = await axios.post<RefreshResponse>(
-                    `${API_URL}/auth/refresh`,
+                    `${API_URL}${API_ENDPOINTS.AUTH.REFRESH}`,
                     { refresh_token: refreshToken },
                     { headers: { 'Content-Type': 'application/json' } }
                 );
 
-                const { access_token, expires_in } = response.data;
-                tokenStore.setAccessToken(access_token);
+                const { access_token } = response.data;
+                useAuthStore.getState().setAccessToken(access_token);
 
                 // Process queue with new token
                 processQueue(null, access_token);
@@ -114,11 +115,11 @@ apiClient.interceptors.response.use(
             } catch (refreshError) {
                 processQueue(refreshError as Error, null);
                 isRefreshing = false;
-                tokenStore.clearTokens();
+                useAuthStore.getState().logout();
 
                 // Optionally redirect to login page if window is defined
                 if (typeof window !== 'undefined') {
-                    window.location.href = '/login';
+                    window.location.href = API_ENDPOINTS.AUTH.LOGIN;
                 }
 
                 return Promise.reject(refreshError);
@@ -128,3 +129,4 @@ apiClient.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+
