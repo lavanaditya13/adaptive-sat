@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: adaptive_sat_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: adaptive_sat
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+    container_name: adaptive_sat_web
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/adaptive_sat
+      - SYNC_DATABASE_URL=postgresql://postgres:postgres@db:5432/adaptive_sat
+      - SECRET_KEY=super-secret-temporary-key-change-in-production
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
