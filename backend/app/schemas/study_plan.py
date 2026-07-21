@@ -1,23 +1,26 @@
 from datetime import datetime
 import uuid
-from typing import Optional, Dict, Any
-from pydantic import BaseModel, ConfigDict
+from typing import Any, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
 
 class StudyPlanBase(BaseModel):
     student_id: uuid.UUID
-    title: str
-    description: Optional[str] = None
-    recommended_topics: Dict[str, Any]  # Target topics, subtopics, status, and deadlines
-    is_active: bool = True
+    title: Optional[str] = None
+    status: str = "active"
+    items: list[dict[str, Any]] = Field(default_factory=list)
+
 
 class StudyPlanCreate(StudyPlanBase):
     pass
 
+
 class StudyPlanUpdate(BaseModel):
     title: Optional[str] = None
-    description: Optional[str] = None
-    recommended_topics: Optional[Dict[str, Any]] = None
-    is_active: Optional[bool] = None
+    status: Optional[str] = None
+    items: Optional[list[dict[str, Any]]] = None
+
 
 class StudyPlanResponse(StudyPlanBase):
     id: uuid.UUID

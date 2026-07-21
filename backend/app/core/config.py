@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     # Security
-    SECRET_KEY: str
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 11520  # 8 days
+    SECRET_KEY: str = "change-this-secret-key"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
 
     # PostgreSQL Database Credentials
     POSTGRES_SERVER: str = "localhost"

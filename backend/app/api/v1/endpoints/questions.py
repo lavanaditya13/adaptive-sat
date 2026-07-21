@@ -1,47 +1,87 @@
 import uuid
-from typing import List
-from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, status
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.database import get_db
+from app.models.question import Question
+from app.models.topic import Topic
 from app.schemas.question import QuestionCreate, QuestionResponse
 
 router = APIRouter()
 
+
 @router.post("", response_model=QuestionResponse, status_code=status.HTTP_201_CREATED)
-async def create_question(question_in: QuestionCreate, db: AsyncSession = Depends(get_db)):
-    """
-    Create a new SAT question.
-    """
-    now = datetime.now(timezone.utc)
-    return QuestionResponse(
-        id=uuid.uuid4(),
-        prompt=question_in.prompt,
-        choices=question_in.choices,
-        correct_answer=question_in.correct_answer,
-        explanation=question_in.explanation,
-        difficulty=question_in.difficulty,
-        topic_id=question_in.topic_id,
-        created_at=now,
-        updated_at=now
+async def create_question(
+    payload: QuestionCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    topic = await db.get(Topic, payload.topic_id)
+
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
+    question = Question(**payload.model_dump())
+
+    db.add(question)
+    await db.commit()
+    await db.refresh(question)
+
+    return question
+
+
+@router.get("", response_model=list[QuestionResponse])
+async def list_questions(
+    topic_id: uuid.UUID | None = None,
+    difficulty: str | None = None,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(Question)
+
+    if topic_id:
+        query = query.where(Question.topic_id == topic_id)
+
+    if difficulty:
+        query = query.where(Question.difficulty == difficulty)
+
+    query = query.offset(skip).limit(limit)
+
+    result = await db.execute(query)
+
+    return result.scalars().all()
+
+
+@router.get("/by-topic/{topic_id}", response_model=list[QuestionResponse])
+async def get_questions_by_topic(
+    topic_id: uuid.UUID,
+    limit: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    topic = await db.get(Topic, topic_id)
+
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
+    result = await db.execute(
+        select(Question)
+        .where(Question.topic_id == topic_id)
+        .limit(limit)
     )
 
-@router.get("", response_model=List[QuestionResponse])
-async def list_questions(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
-    """
-    List SAT questions.
-    """
-    now = datetime.now(timezone.utc)
-    return [
-        QuestionResponse(
-            id=uuid.uuid4(),
-            prompt="What is 2x + 5 = 15 solved for x?",
-            choices={"A": "3", "B": "5", "C": "8", "D": "10"},
-            correct_answer="B",
-            explanation="Subtract 5 from both sides to get 2x = 10, then divide by 2 to find x = 5.",
-            difficulty="Easy",
-            topic_id=1,
-            created_at=now,
-            updated_at=now
-        )
-    ]
+    return result.scalars().all()
+
+
+@router.get("/{question_id}", response_model=QuestionResponse)
+async def get_question(
+    question_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    question = await db.get(Question, question_id)
+
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    return question
