@@ -1,0 +1,9 @@
+export const SUMMARY_TITLE = 'Practice Complete!';
+export const ACCURACY_LABEL = 'Accuracy';
+export const SCORE_LABEL = 'Score';
+export const SLASH_SEPARATOR = '/';
+export const PERCENT_SUFFIX = '%';
+export const ADAPTIVE_UNLOCKED_TITLE = 'Adaptive Practice Unlocked! 🎉';
+export const ADAPTIVE_PROGRESS_TITLE = 'Adaptive Mode Progress';
+export const SESSIONS_PROGRESS_SUFFIX = ' sessions completed';
+export const UNLOCKED_BADGE_TEXT = 'Unlocked';
