@@ -1,5 +1,4 @@
 from typing import List, Optional
-import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.models.study_plan import StudyPlan
@@ -9,7 +8,7 @@ class StudyPlanRepository(BaseRepository[StudyPlan]):
     def __init__(self):
         super().__init__(StudyPlan)
 
-    async def get_active_plan_for_student(self, db: AsyncSession, student_id: uuid.UUID) -> Optional[StudyPlan]:
+    async def get_active_plan_for_student(self, db: AsyncSession, student_id: int) -> Optional[StudyPlan]:
         """
         Fetch the currently active study plan for a student.
         """
@@ -20,7 +19,7 @@ class StudyPlanRepository(BaseRepository[StudyPlan]):
         result = await db.execute(query)
         return result.scalar_one_or_none()
 
-    async def get_by_student(self, db: AsyncSession, student_id: uuid.UUID) -> List[StudyPlan]:
+    async def get_by_student(self, db: AsyncSession, student_id: int) -> List[StudyPlan]:
         """
         Fetch all study plans (past and active) for a student.
         """

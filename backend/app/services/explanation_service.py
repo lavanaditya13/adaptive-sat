@@ -1,4 +1,3 @@
-import uuid
 from typing import Any
 
 
@@ -13,7 +12,7 @@ class ExplanationService:
 
     async def generate_explanation(
         self,
-        question_id: uuid.UUID,
+        question_id: int,
         selected_answer: str | None,
         correct_answer: str,
         is_correct: bool,
@@ -28,7 +27,7 @@ class ExplanationService:
             )
 
         return {
-            "question_id": str(question_id),
+            "question_id": question_id,
             "selected_answer": selected_answer,
             "correct_answer": correct_answer,
             "is_correct": is_correct,

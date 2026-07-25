@@ -1,5 +1,4 @@
 from typing import List, Optional
-import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.models.practice_session import PracticeSession
@@ -9,7 +8,7 @@ class PracticeSessionRepository(BaseRepository[PracticeSession]):
     def __init__(self):
         super().__init__(PracticeSession)
 
-    async def get_active_session_for_student(self, db: AsyncSession, student_id: uuid.UUID) -> Optional[PracticeSession]:
+    async def get_active_session_for_student(self, db: AsyncSession, student_id: int) -> Optional[PracticeSession]:
         """
         Fetch the currently active/started practice session for a student.
         """
@@ -20,7 +19,7 @@ class PracticeSessionRepository(BaseRepository[PracticeSession]):
         result = await db.execute(query)
         return result.scalar_one_or_none()
 
-    async def get_by_student(self, db: AsyncSession, student_id: uuid.UUID) -> List[PracticeSession]:
+    async def get_by_student(self, db: AsyncSession, student_id: int) -> List[PracticeSession]:
         """
         Fetch all practice sessions for a specific student.
         """

@@ -1,12 +1,11 @@
 from datetime import datetime
-import uuid
 from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class StudyPlanBase(BaseModel):
-    student_id: uuid.UUID
+    student_id: int
     title: Optional[str] = None
     status: str = "active"
     items: list[dict[str, Any]] = Field(default_factory=list)
@@ -23,7 +22,7 @@ class StudyPlanUpdate(BaseModel):
 
 
 class StudyPlanResponse(StudyPlanBase):
-    id: uuid.UUID
+    id: int
     created_at: datetime
     updated_at: datetime
 

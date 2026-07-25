@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
 from typing import Any, TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, JSON, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -12,13 +11,22 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.attempt import Attempt
+    from app.models.practice_session_question import PracticeSessionQuestion
     from app.models.topic import Topic
 
 
 class Question(Base):
     __tablename__ = "questions"
 
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    section: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="math",
+        server_default="math",
+        index=True,
+    )
 
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
 
@@ -41,9 +49,10 @@ class Question(Base):
         String(50),
         nullable=False,
         default="medium",
+        server_default="medium",
     )
 
-    topic_id: Mapped[uuid.UUID] = mapped_column(
+    topic_id: Mapped[int] = mapped_column(
         ForeignKey("topics.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -67,5 +76,9 @@ class Question(Base):
     )
 
     attempts: Mapped[list["Attempt"]] = relationship(
+        back_populates="question",
+    )
+
+    session_questions: Mapped[list["PracticeSessionQuestion"]] = relationship(
         back_populates="question",
     )

@@ -1,5 +1,18 @@
 from pydantic import BaseModel, EmailStr
-from app.schemas.user import UserResponse
+
+
+class AuthUserResponse(BaseModel):
+    user_id: str
+    email: EmailStr
+    full_name: str | None = None
+    role: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    expires_in: int
+    user: AuthUserResponse
 
 class SignupRequest(BaseModel):
     email: EmailStr
@@ -9,13 +22,11 @@ class SignupRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     email: EmailStr
+    role: str = "student"
     password: str
 
 class AuthResponse(BaseModel):
-    user: UserResponse
-    access_token: str
-    refresh_token: str
-    expires_in: int
+    user: AuthUserResponse
 
 class RefreshRequest(BaseModel):
     refresh_token: str

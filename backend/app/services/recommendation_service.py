@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.study_plan import StudyPlan
@@ -8,7 +6,7 @@ from app.services.skill_scoring_service import get_student_progress
 
 async def generate_study_plan_for_student(
     db: AsyncSession,
-    student_id: UUID,
+    student_id: int,
 ) -> StudyPlan:
     progress = await get_student_progress(db=db, student_id=student_id)
     weakest_topics = progress["weakest_topics"]

@@ -1,5 +1,4 @@
 from typing import List
-import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.models.attempt import Attempt
@@ -9,7 +8,7 @@ class AttemptRepository(BaseRepository[Attempt]):
     def __init__(self):
         super().__init__(Attempt)
 
-    async def get_attempts_by_session(self, db: AsyncSession, session_id: uuid.UUID) -> List[Attempt]:
+    async def get_attempts_by_session(self, db: AsyncSession, session_id: int) -> List[Attempt]:
         """
         Fetch all answer attempts logged for a specific practice session.
         """

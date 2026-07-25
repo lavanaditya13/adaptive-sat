@@ -1,5 +1,4 @@
 from collections import defaultdict
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +31,7 @@ def classify_mistake_type(
     return "concept_gap"
 
 
-async def get_student_progress(db: AsyncSession, student_id: UUID) -> dict:
+async def get_student_progress(db: AsyncSession, student_id: int) -> dict:
     result = await db.execute(
         select(Attempt).where(Attempt.student_id == student_id)
     )
@@ -62,7 +61,7 @@ async def get_student_progress(db: AsyncSession, student_id: UUID) -> dict:
 
         performance_by_topic.append(
             {
-                "topic_id": str(topic_id),
+                "topic_id": topic_id,
                 "topic_name": topic.name if topic else "Unknown Topic",
                 "attempted": attempted,
                 "correct": correct,
@@ -76,7 +75,7 @@ async def get_student_progress(db: AsyncSession, student_id: UUID) -> dict:
     )[:3]
 
     return {
-        "student_id": str(student_id),
+        "student_id": student_id,
         "total_attempted": total_attempted,
         "total_correct": total_correct,
         "overall_accuracy": round(overall_accuracy, 2),

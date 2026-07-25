@@ -1,15 +1,15 @@
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, verify_password
 from app.repositories.user import user_repository
-from app.schemas.auth import SignupRequest, LoginRequest, AuthResponse, RefreshRequest, RefreshResponse
+from app.schemas.auth import AuthUserResponse, LoginRequest, LoginResponse, RefreshRequest, RefreshResponse, SignupRequest
 
 router = APIRouter()
 
-@router.post("/signup", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/signup", response_model=AuthUserResponse, status_code=status.HTTP_201_CREATED)
 async def signup(user_in: SignupRequest, db: AsyncSession = Depends(get_db)):
     """
     Register a new user (student, parent, or tutor).
@@ -22,21 +22,27 @@ async def signup(user_in: SignupRequest, db: AsyncSession = Depends(get_db)):
         )
     
     # Create the user in the database
-    new_user = await user_repository.create_user(db, obj_in=user_in)
+    try:
+        new_user = await user_repository.create_user(db, obj_in=user_in)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid password format",
+        ) from exc
     
-    # Generate tokens
-    access_token = create_access_token(new_user.id)
-    refresh_token = create_access_token(new_user.id, expires_delta=timedelta(days=30))
-    
-    return AuthResponse(
-        user=new_user,
-        access_token=access_token,
-        refresh_token=refresh_token,
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    return AuthUserResponse(
+        user_id=str(new_user.id),
+        email=new_user.email,
+        full_name=new_user.full_name,
+        role=new_user.role,
     )
 
-@router.post("/login", response_model=AuthResponse)
-async def login(credentials: LoginRequest, db: AsyncSession = Depends(get_db)):
+@router.post("/login", response_model=LoginResponse)
+async def login(
+    credentials: LoginRequest,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
     """
     Authenticate user credentials and return access & refresh JWT tokens.
     """
@@ -46,16 +52,34 @@ async def login(credentials: LoginRequest, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
+
+    if credentials.role and user.role != credentials.role:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+        )
     
-    # Generate tokens
     access_token = create_access_token(user.id)
-    refresh_token = create_access_token(user.id, expires_delta=timedelta(days=30))
-    
-    return AuthResponse(
-        user=user,
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        samesite="lax",
+        secure=settings.ENVIRONMENT == "production",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+
+    return LoginResponse(
         access_token=access_token,
-        refresh_token=refresh_token,
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        token_type="bearer",
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=AuthUserResponse(
+            user_id=str(user.id),
+            email=user.email,
+            full_name=user.full_name,
+            role=user.role,
+        ),
     )
 
 @router.post("/refresh", response_model=RefreshResponse)

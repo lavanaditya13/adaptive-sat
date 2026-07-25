@@ -1,5 +1,4 @@
 from datetime import datetime
-import uuid
 from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict
@@ -11,7 +10,7 @@ class QuestionBase(BaseModel):
     correct_answer: str
     explanation: Optional[str] = None
     difficulty: str = "medium"
-    topic_id: uuid.UUID
+    topic_id: int
 
 
 class QuestionCreate(QuestionBase):
@@ -24,11 +23,11 @@ class QuestionUpdate(BaseModel):
     correct_answer: Optional[str] = None
     explanation: Optional[str] = None
     difficulty: Optional[str] = None
-    topic_id: Optional[uuid.UUID] = None
+    topic_id: Optional[int] = None
 
 
 class QuestionResponse(QuestionBase):
-    id: uuid.UUID
+    id: int
     created_at: datetime
     updated_at: datetime
 

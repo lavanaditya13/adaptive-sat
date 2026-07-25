@@ -1,16 +1,30 @@
 from app.schemas.user import UserBase, UserCreate, UserUpdate, UserResponse
 from app.schemas.topic import TopicBase, TopicCreate, TopicUpdate, TopicResponse, TopicDetailResponse
 from app.schemas.question import QuestionBase, QuestionCreate, QuestionUpdate, QuestionResponse
-from app.schemas.practice_session import (
-    PracticeSessionBase,
-    PracticeSessionCreate,
-    PracticeSessionUpdate,
-    PracticeSessionResponse,
-    PracticeSessionWithQuestionsResponse,
-)
 from app.schemas.attempt import AttemptBase, AttemptCreate, AttemptUpdate, AttemptResponse
 from app.schemas.study_plan import StudyPlanBase, StudyPlanCreate, StudyPlanUpdate, StudyPlanResponse
 from app.schemas.auth import SignupRequest, LoginRequest, AuthResponse, RefreshRequest, RefreshResponse
+from app.schemas.practice import (
+    AdaptiveUnlockResponse,
+    PracticeStartRequest,
+    PublicQuestionResponse,
+    PracticeQuestionResponse,
+    PracticeStartResponse,
+    SubmitAnswerRequest,
+    SubmitAnswerResponse,
+    ScoreSummary,
+    PracticeCompleteResponse,
+    StudentDashboardResponse,
+    DashboardStudentResponse,
+    DashboardProgressResponse,
+    DashboardWeakTopicResponse,
+    DashboardSectionResponse,
+    SectionSelectionRequest,
+    SectionPracticeOption,
+    UnlockRequirement,
+    TopicActionItem,
+    SectionSelectionResponse,
+)
 
 __all__ = [
     "UserBase",
@@ -26,11 +40,6 @@ __all__ = [
     "QuestionCreate",
     "QuestionUpdate",
     "QuestionResponse",
-    "PracticeSessionBase",
-    "PracticeSessionCreate",
-    "PracticeSessionUpdate",
-    "PracticeSessionResponse",
-    "PracticeSessionWithQuestionsResponse",
     "AttemptBase",
     "AttemptCreate",
     "AttemptUpdate",
@@ -44,4 +53,23 @@ __all__ = [
     "AuthResponse",
     "RefreshRequest",
     "RefreshResponse",
+    "SectionSelectionRequest",
+    "SectionPracticeOption",
+    "UnlockRequirement",
+    "TopicActionItem",
+    "SectionSelectionResponse",
+    "AdaptiveUnlockResponse",
+    "DashboardStudentResponse",
+    "DashboardProgressResponse",
+    "DashboardWeakTopicResponse",
+    "DashboardSectionResponse",
+    "PracticeStartRequest",
+    "PublicQuestionResponse",
+    "PracticeQuestionResponse",
+    "PracticeStartResponse",
+    "SubmitAnswerRequest",
+    "SubmitAnswerResponse",
+    "ScoreSummary",
+    "PracticeCompleteResponse",
+    "StudentDashboardResponse",
 ]

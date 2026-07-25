@@ -64,6 +64,22 @@ This starts:
 - The FastAPI application on [http://localhost:8000](http://localhost:8000)
 - PostgreSQL on `localhost:5432`
 
+### One-command startup
+
+Use the helper script to start the database, run migrations, optionally seed sample questions, and launch the API:
+
+```bash
+./scripts/start_backend.sh
+```
+
+To skip seeding on startup:
+
+```bash
+./scripts/start_backend.sh --no-seed
+```
+
+The script uses Docker for the runtime, so it does not require a local virtual environment.
+
 ---
 
 ## Running Tests
