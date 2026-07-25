@@ -1,0 +1,10 @@
+export const CONTAINER_STYLES = 'max-w-2xl mx-auto p-4 md:p-6 space-y-6 min-h-screen flex flex-col justify-between';
+export const HEADER_STYLES = 'flex items-center justify-between';
+export const CONTENT_STYLES = 'space-y-6 flex-1';
+export const FOOTER_STYLES = 'sticky bottom-4 bg-background/80 backdrop-blur-md pt-4 pb-2 border-t flex flex-col sm:flex-row items-center justify-between gap-4';
+export const FEEDBACK_CONTAINER_STYLES = 'flex items-center gap-2 text-sm font-medium text-emerald-600 dark:text-emerald-400';
+export const SUBMIT_BUTTON_STYLES = 'w-full sm:w-auto px-8';
+export const EXIT_BUTTON_STYLES = 'text-muted-foreground hover:text-foreground';
+export const LOADING_CONTAINER_STYLES = 'max-w-2xl mx-auto p-6 space-y-6';
+export const SKELETON_BAR_STYLES = 'h-6 w-full';
+export const SKELETON_CARD_STYLES = 'h-64 w-full';

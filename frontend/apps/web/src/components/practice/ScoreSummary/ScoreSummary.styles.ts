@@ -1,0 +1,9 @@
+export const CARD_STYLES = 'p-6 shadow-sm space-y-6 text-center';
+export const TITLE_STYLES = 'text-2xl font-bold tracking-tight';
+export const STATS_GRID_STYLES = 'grid grid-cols-2 gap-4 my-4';
+export const STAT_BOX_STYLES = 'p-4 rounded-lg bg-muted/50 flex flex-col items-center';
+export const STAT_VALUE_STYLES = 'text-3xl font-extrabold text-primary';
+export const STAT_LABEL_STYLES = 'text-xs text-muted-foreground mt-1 font-medium';
+export const UNLOCK_CONTAINER_STYLES = 'mt-6 p-4 rounded-lg border bg-accent/30 space-y-2';
+export const UNLOCK_TITLE_STYLES = 'text-sm font-semibold flex items-center justify-center gap-2';
+export const UNLOCK_PROGRESS_TEXT = 'text-xs text-muted-foreground';
