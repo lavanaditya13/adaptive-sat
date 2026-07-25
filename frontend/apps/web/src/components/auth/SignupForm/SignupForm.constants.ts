@@ -1,0 +1,12 @@
+export const TITLE = 'Sign Up';
+export const FULL_NAME_LABEL = 'Full Name';
+export const EMAIL_LABEL = 'Email';
+export const PASSWORD_LABEL = 'Password';
+export const ROLE_LABEL = 'Role';
+export const SUBMIT_LABEL = 'Sign Up';
+export const HAS_ACCOUNT = 'Already have an account?';
+export const LOGIN_LINK = 'Log in';
+export const ROLE_STUDENT = 'Student';
+export const ROLE_PARENT = 'Parent';
+export const ROLE_TUTOR = 'Tutor';
+export const ROLE_NOTE = 'Note: Only Student accounts are functional today.';

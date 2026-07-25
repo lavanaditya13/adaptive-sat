@@ -1,0 +1,13 @@
+export const CONTAINER_STYLES = 'max-w-5xl mx-auto p-6 space-y-8';
+export const HEADER_CONTAINER_STYLES = 'flex items-center justify-between mb-6';
+export const PAGE_TITLE_STYLES = 'text-3xl font-bold tracking-tight';
+export const SECTION_TITLE_STYLES = 'text-xl font-semibold tracking-tight';
+export const OPTIONS_GRID_STYLES = 'grid grid-cols-1 md:grid-cols-2 gap-4';
+export const TOPICS_LIST_STYLES = 'space-y-3';
+export const ALERT_CONTAINER_STYLES = 'mb-6';
+export const SKELETON_TITLE_STYLES = 'h-8 w-48 mb-6';
+export const SKELETON_GRID_STYLES = 'grid grid-cols-1 md:grid-cols-2 gap-4 mb-8';
+export const SKELETON_CARD_STYLES = 'h-40';
+export const SKELETON_TOPIC_STYLES = 'h-16';
+export const BACK_BUTTON_STYLES = 'mb-4';
+export const RETRY_BUTTON_STYLES = 'ml-4';
