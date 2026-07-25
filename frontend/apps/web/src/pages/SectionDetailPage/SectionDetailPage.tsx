@@ -10,7 +10,7 @@ import { TopicListItem } from '@/components/practice/TopicListItem/TopicListItem
 import { selectSection, startPractice, type StartPracticePayload } from '@/services/practice-service';
 import { queryKeys } from '@/constants/query-keys';
 import { ROUTES } from '@/constants/routes';
-import type { ApiErrorResponse, PracticeOption } from '@/types/api';
+import type { ApiErrorResponse } from '@/types/api';
 import {
   PAGE_TITLE_PREFIX,
   PRACTICE_OPTIONS_TITLE,
