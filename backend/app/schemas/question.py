@@ -1,29 +1,33 @@
 from datetime import datetime
-import uuid
-from typing import Optional, Dict, Any
+from typing import Any, Optional
+
 from pydantic import BaseModel, ConfigDict
+
 
 class QuestionBase(BaseModel):
     prompt: str
-    choices: Dict[str, Any]  # Key-value options (e.g. {"A": "Option A", "B": "Option B"})
+    choices: dict[str, Any]
     correct_answer: str
     explanation: Optional[str] = None
-    difficulty: str = "Medium"  # Easy, Medium, Hard
+    difficulty: str = "medium"
     topic_id: int
+
 
 class QuestionCreate(QuestionBase):
     pass
 
+
 class QuestionUpdate(BaseModel):
     prompt: Optional[str] = None
-    choices: Optional[Dict[str, Any]] = None
+    choices: Optional[dict[str, Any]] = None
     correct_answer: Optional[str] = None
     explanation: Optional[str] = None
     difficulty: Optional[str] = None
     topic_id: Optional[int] = None
 
+
 class QuestionResponse(QuestionBase):
-    id: uuid.UUID
+    id: int
     created_at: datetime
     updated_at: datetime
 

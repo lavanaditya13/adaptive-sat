@@ -22,6 +22,7 @@ services:
       - "8000:8000"
     environment:
       - ENVIRONMENT=development
+      - CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/adaptive_sat
       - SYNC_DATABASE_URL=postgresql://postgres:postgres@db:5432/adaptive_sat
       - SECRET_KEY=super-secret-temporary-key-change-in-production

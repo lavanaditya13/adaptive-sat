@@ -1,20 +1,36 @@
-import uuid
-from typing import Dict, Any, Optional
+from typing import Any
+
 
 class ExplanationService:
     """
-    Service responsible for explaining questions, options, and student mistake patterns.
-    This can eventually interface with an LLM for personalized feedback.
+    Service responsible for generating explanations for student answers.
+
+    MVP note:
+    This is currently a placeholder. Later, this can call an LLM or a more advanced
+    explanation engine using the question, selected answer, correct answer, and mistake type.
     """
+
     async def generate_explanation(
-        self, question_id: uuid.UUID, selected_answer: str, mistake_type: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        Stub to generate explanation text based on the user's selected answer and mistake type.
-        """
+        self,
+        question_id: int,
+        selected_answer: str | None,
+        correct_answer: str,
+        is_correct: bool,
+        mistake_type: str | None = None,
+    ) -> dict[str, Any]:
+        if is_correct:
+            explanation = "Correct. Nice work — keep practicing to build consistency."
+        else:
+            explanation = (
+                "Review the concept behind this question and compare your selected answer "
+                "with the correct answer. A more detailed explanation engine will be added later."
+            )
+
         return {
-            "question_id": str(question_id),
+            "question_id": question_id,
             "selected_answer": selected_answer,
+            "correct_answer": correct_answer,
+            "is_correct": is_correct,
             "mistake_type": mistake_type,
-            "explanation": "Mock explanation: Make sure to isolate variables before performing operations."
+            "explanation": explanation,
         }

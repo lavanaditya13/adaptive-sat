@@ -16,6 +16,7 @@ sqlalchemy = "^2.0.28"
 asyncpg = "^0.29.0"
 alembic = "^1.13.1"
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+bcrypt = "4.0.1"
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}
 python-multipart = "^0.0.9"
 
