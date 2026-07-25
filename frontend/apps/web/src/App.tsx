@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { ROUTES } from '@/constants/routes';
 import {
   LoginPage,
@@ -12,6 +12,7 @@ import {
 export function App() {
   return (
     <Routes>
+      <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
       <Route path={ROUTES.SIGNUP} element={<SignupPage />} />
       <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
