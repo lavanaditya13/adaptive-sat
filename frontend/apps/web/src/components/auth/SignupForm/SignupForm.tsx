@@ -1,17 +1,16 @@
-import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@workspace/ui/components/button';
 import { Input } from '@workspace/ui/components/input';
 import { Label } from '@workspace/ui/components/label';
-import { Alert, AlertDescription } from '@workspace/ui/components/alert';
 import { RadioGroup, RadioGroupItem } from '@workspace/ui/components/radio-group';
 import { signupSchema, type SignupFormData } from '@/utils/validation-schemas';
 import { signup } from '@/services/auth-service';
 import { useAuthStore } from '@/store/auth-store';
 import { ROUTES } from '@/constants/routes';
-import { parseApiError } from '@/utils/parse-api-error';
+import { getApiErrorDetail } from '@/utils/api-errors';
+import { useToast } from '@/components/toast/toast-provider';
 import { formStyles, inputStyles, buttonStyles, linkStyles, noteStyles } from './SignupForm.styles';
 import {
   TITLE,
@@ -31,6 +30,7 @@ import {
 export function SignupForm() {
   const navigate = useNavigate();
   const setUser = useAuthStore((state) => state.setUser);
+  const { toast } = useToast();
   const {
     register,
     handleSubmit,
@@ -42,29 +42,23 @@ export function SignupForm() {
     },
   });
 
-  const [apiError, setApiError] = useState<string | null>(null);
-
   const onSubmit = async (data: SignupFormData) => {
     try {
-      setApiError(null);
       const user = await signup(data);
       setUser(user);
       navigate(ROUTES.DASHBOARD);
     } catch (error) {
-      const errorMessage = parseApiError(error);
-      setApiError(errorMessage);
+      toast({
+        title: 'Signup failed',
+        description: getApiErrorDetail(error),
+        variant: 'destructive',
+      });
     }
   };
 
   return (
     <div className="w-full max-w-md">
       <h1 className="text-2xl font-bold mb-6">{TITLE}</h1>
-
-      {apiError && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertDescription>{apiError}</AlertDescription>
-        </Alert>
-      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className={formStyles}>
         <div className="space-y-2">

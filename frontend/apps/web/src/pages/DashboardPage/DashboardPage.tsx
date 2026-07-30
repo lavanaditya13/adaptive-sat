@@ -1,18 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
-import { Button } from '@workspace/ui/components/button';
-import { Alert, AlertDescription } from '@workspace/ui/components/alert';
 import { Skeleton } from '@workspace/ui/components/skeleton';
 import { StatCard } from '@/components/dashboard/StatCard/StatCard';
 import { WeakTopicsList } from '@/components/dashboard/WeakTopicsList/WeakTopicsList';
 import { SectionCard } from '@/components/dashboard/SectionCard/SectionCard';
 import { getDashboard } from '@/services/dashboard-service';
 import { queryKeys } from '@/constants/query-keys';
+import { getApiErrorDetail } from '@/utils/api-errors';
 import {
   GREETING_PREFIX,
   GREETING_EXCLAMATION,
   SECTIONS_TITLE,
-  ERROR_MESSAGE,
-  RETRY_BUTTON,
   SESSIONS_LABEL,
   QUESTIONS_LABEL,
   ACCURACY_LABEL,
@@ -29,7 +26,6 @@ import {
   SKELETON_WEAK_TOPICS_STYLES,
   SKELETON_SECTION_TITLE_STYLES,
   SKELETON_SECTION_CARD_STYLES,
-  RETRY_BUTTON_STYLES,
 } from './DashboardPage.styles';
 
 // note: weak_topics has no section_id, so it can't deep-link into topic practice yet without another backend field
@@ -39,7 +35,6 @@ export function DashboardPage() {
     data: dashboard,
     isLoading,
     error,
-    refetch,
   } = useQuery({
     queryKey: queryKeys.dashboard.all,
     queryFn: getDashboard,
@@ -65,21 +60,11 @@ export function DashboardPage() {
   }
 
   if (error) {
+    const message = getApiErrorDetail(error);
+
     return (
-      <div className={CONTAINER_STYLES}>
-        <Alert variant="destructive">
-          <AlertDescription>
-            {ERROR_MESSAGE}
-            <Button
-              variant="outline"
-              size="sm"
-              className={RETRY_BUTTON_STYLES}
-              onClick={() => refetch()}
-            >
-              {RETRY_BUTTON}
-            </Button>
-          </AlertDescription>
-        </Alert>
+      <div className="flex min-h-screen items-center justify-center px-6 text-center">
+        <p className="max-w-xl text-balance text-lg font-medium text-foreground">{message}</p>
       </div>
     );
   }
