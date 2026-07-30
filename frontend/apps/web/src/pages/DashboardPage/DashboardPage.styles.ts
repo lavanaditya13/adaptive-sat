@@ -8,4 +8,3 @@ export const SKELETON_STAT_STYLES = 'h-24';
 export const SKELETON_WEAK_TOPICS_STYLES = 'h-48';
 export const SKELETON_SECTION_TITLE_STYLES = 'h-7 w-32 mb-4';
 export const SKELETON_SECTION_CARD_STYLES = 'h-32';
-export const RETRY_BUTTON_STYLES = 'ml-4';

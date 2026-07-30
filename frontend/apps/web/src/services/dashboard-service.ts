@@ -1,6 +1,7 @@
 import apiClient from './api-client';
 import { API } from '@/constants/api-endpoints';
 import type { DashboardResponse } from '@/types/api';
+import { shouldUseMockFallback } from '@/utils/api-errors';
 
 export const MOCK_DASHBOARD: DashboardResponse = {
   student: { full_name: 'Alex Student' },
@@ -25,6 +26,10 @@ export async function getDashboard(): Promise<DashboardResponse> {
     const response = await apiClient.get<DashboardResponse>(API.DASHBOARD);
     return response.data;
   } catch (error) {
+    if (!shouldUseMockFallback(error)) {
+      throw error;
+    }
+
     console.warn('Backend unavailable, returning mock dashboard data:', error);
     return MOCK_DASHBOARD;
   }
