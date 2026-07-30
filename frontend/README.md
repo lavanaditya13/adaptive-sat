@@ -19,3 +19,13 @@ To use the components in your app, import them from the `ui` package.
 ```tsx
 import { Button } from "@workspace/ui/components/button";
 ```
+
+## API configuration
+
+The web app reads its backend origin from `VITE_API_BASE_URL`.
+
+```bash
+cp apps/web/.env.example apps/web/.env
+```
+
+If the variable is not set, the app falls back to `https://adaptive-sat-backend.vercel.app`.

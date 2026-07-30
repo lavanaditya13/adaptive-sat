@@ -1,6 +1,7 @@
 import apiClient from './api-client';
 import { API } from '@/constants/api-endpoints';
 import { mockHandlers } from '@/mocks';
+import { shouldUseMockFallback } from '@/utils/api-errors';
 import type {
   SectionContextResponse,
   StartPracticeResponse,
@@ -23,6 +24,10 @@ export async function selectSection(sectionId: number): Promise<SectionContextRe
     );
     return response.data;
   } catch (error) {
+    if (!shouldUseMockFallback(error)) {
+      throw error;
+    }
+
     console.warn('API selectSection failed, returning mock fallback response:', error);
     return mockHandlers.selectSection(sectionId);
   }
@@ -38,6 +43,10 @@ export async function startPractice(
     );
     return response.data;
   } catch (error) {
+    if (!shouldUseMockFallback(error)) {
+      throw error;
+    }
+
     console.warn('API startPractice failed, returning mock fallback response:', error);
     return mockHandlers.startPractice();
   }
@@ -56,6 +65,10 @@ export async function submitAnswer(
     });
     return response.data;
   } catch (error) {
+    if (!shouldUseMockFallback(error)) {
+      throw error;
+    }
+
     console.warn('API submitAnswer failed, returning mock fallback response:', error);
     return mockHandlers.submitAnswer(selectedAnswer, timeSpentSeconds, confidenceLevel);
   }
@@ -68,6 +81,10 @@ export async function getCurrentQuestion(): Promise<QuestionResponse> {
     const response = await apiClient.get<QuestionResponse>(API.PRACTICE.QUESTION);
     return response.data;
   } catch (error) {
+    if (!shouldUseMockFallback(error)) {
+      throw error;
+    }
+
     console.warn('API getCurrentQuestion failed, returning mock fallback response:', error);
     return mockHandlers.getCurrentQuestion();
   }
@@ -78,6 +95,10 @@ export async function completePractice(): Promise<CompleteResponse> {
     const response = await apiClient.post<CompleteResponse>(API.PRACTICE.COMPLETE);
     return response.data;
   } catch (error) {
+    if (!shouldUseMockFallback(error)) {
+      throw error;
+    }
+
     console.warn('API completePractice failed, returning mock fallback response:', error);
     return mockHandlers.completePractice();
   }
