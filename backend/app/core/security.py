@@ -2,7 +2,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import Cookie, Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import jwt
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +11,6 @@ from app.core.database import get_db
 from app.models.user import User
 
 ALGORITHM = "HS256"
-bearer_scheme = HTTPBearer(auto_error=False)
 
 # Use bcrypt_sha256 to avoid bcrypt's 72-byte password input limit while
 # keeping backward compatibility for any existing bcrypt hashes.
@@ -31,7 +29,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
-def create_access_token(
+def create_session_token(
     subject: str | Any,
     expires_delta: timedelta | None = None,
 ) -> str:
@@ -39,7 +37,7 @@ def create_access_token(
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+            minutes=settings.SESSION_EXPIRE_MINUTES
         )
 
     to_encode = {
@@ -55,21 +53,10 @@ def create_access_token(
 
 
 async def get_current_user(
-    bearer_credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    access_token: str | None = Cookie(default=None),
+    session: str | None = Cookie(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    token = access_token
-
-    if bearer_credentials is not None:
-        if bearer_credentials.scheme.lower() != "bearer":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication scheme",
-            )
-        token = bearer_credentials.credentials
-
-    if not token:
+    if not session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
@@ -77,7 +64,7 @@ async def get_current_user(
 
     try:
         payload = jwt.decode(
-            token,
+            session,
             settings.SECRET_KEY,
             algorithms=[ALGORITHM],
         )
