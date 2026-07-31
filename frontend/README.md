@@ -29,5 +29,5 @@ cp apps/web/.env.example apps/web/.env
 ```
 
 If the variable is not set:
-- In a deployed build, the app uses `https://adaptive-sat-backend.vercel.app`.
-- In local dev (`vite dev`), the app first tries `http://localhost:8000` (with a ~1s timeout) and falls back to the deployed backend if nothing answers there — so running the frontend locally against a locally-running backend (e.g. via `../../scripts/dev.sh all`) just works without any extra config.
+- In a deployed build, the app uses a relative base URL (same-origin `/api/...` requests) — the frontend and backend ship from the same Vercel project/domain, so no cross-origin URL is needed.
+- In local dev (`vite dev`), the app first tries `http://localhost:8000` (with a ~1s timeout) and falls back to a relative base URL if nothing answers there — so running the frontend locally against a locally-running backend (e.g. via `../../scripts/dev.sh all`) just works without any extra config.

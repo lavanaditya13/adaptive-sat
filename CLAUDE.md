@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Adaptive SAT is an AI-powered SAT prep platform: students practice questions, the backend scores mistakes and derives weak topics, and a study plan / dashboard is generated from that data. Two independently deployed halves live in one repo:
+Adaptive SAT is an AI-powered SAT prep platform: students practice questions, the backend scores mistakes and derives weak topics, and a study plan / dashboard is generated from that data. Two halves live in one repo and deploy together as a single Vercel project (root `vercel.json`):
 
-- `backend/` — FastAPI + SQLAlchemy 2.0 (async) + Alembic + PostgreSQL, deployed to Vercel as a serverless function.
-- `frontend/` — npm-workspaces monorepo (Turborepo) containing a Vite + React 19 SPA (`apps/web`) and a shared shadcn/ui component package (`packages/ui`), deployed separately (the web app talks to the backend over `VITE_API_BASE_URL`).
+- `backend/` — FastAPI + SQLAlchemy 2.0 (async) + Alembic + PostgreSQL, deployed as a serverless function at `/api/*`.
+- `frontend/` — npm-workspaces monorepo (Turborepo) containing a Vite + React 19 SPA (`apps/web`) and a shared shadcn/ui component package (`packages/ui`), deployed as the static site serving everything else.
 
-There is no shared build between the two; treat them as separate projects that happen to live in one git repo.
+They still build independently (no shared build step), but ship from the same Vercel project/domain, so the deployed frontend talks to the backend via same-origin relative paths (see `constants/environment.ts` below) — no CORS, and every preview deployment automatically gets a matching frontend+backend pair on one URL.
 
 ## Commands
 
@@ -31,7 +31,7 @@ Add a new shadcn/ui component (places files in `packages/ui/src/components`, run
 pnpm dlx shadcn@latest add button -c apps/web
 ```
 
-Env config for `apps/web`: copy `frontend/apps/web/.env.example` to `.env` and set `VITE_API_BASE_URL` to override the backend origin explicitly. If unset, `src/constants/environment.ts` resolves it at runtime: in a deployed build it uses the deployed Vercel backend directly; in local dev (`vite dev`) it first probes `http://localhost:8000` (~1s timeout, cached for the page load) and falls back to the deployed backend if nothing answers — so local frontend + local backend just works with no extra config.
+Env config for `apps/web`: copy `frontend/apps/web/.env.example` to `.env` and set `VITE_API_BASE_URL` to override the backend origin explicitly. If unset, `src/constants/environment.ts` resolves it at runtime: in a deployed build it uses a relative base URL (`''`), since frontend and backend are served from the same Vercel project/origin; in local dev (`vite dev`) it first probes `http://localhost:8000` (~1s timeout, cached for the page load) and falls back to a relative base URL if nothing answers there.
 
 ### Backend (run from `backend/`)
 
@@ -88,7 +88,7 @@ Config (`app/core/config.py`) uses `pydantic-settings` with custom `field_valida
 
 **Practice domain model** (the core of the app, in `app/services/practice_service.py`): a student selects a `Section` (math / reading_writing via `SECTION_CODES`), which unlocks `PracticeSession` modes — `section`, `topic`, and `adaptive` (adaptive is gated behind 3 completed section sessions, computed on the fly, not stored as a flag). A session owns ordered `PracticeSessionQuestion` rows; answering one creates an `Attempt`, which `skill_scoring_service.py` aggregates into per-topic accuracy (`get_student_progress`) to find weakest topics. Completing a session triggers `recommendation_service.generate_study_plan_for_student`, which turns weakest topics into a prioritized `StudyPlan`. Dashboard/section/practice endpoints all read from this same attempt/topic-accuracy pipeline — when changing scoring or session logic, check all three (`practice_service`, `skill_scoring_service`, `recommendation_service`) since they share state derived from `Attempt`.
 
-Vercel deployment entrypoint is `backend/index.py` (re-exports `app.main.app`); there is no `vercel.json` in the repo, so build/runtime config is set in the Vercel project dashboard, not in-repo.
+Vercel deployment entrypoint is `backend/index.py` (re-exports `app.main.app`). Build/runtime config is in the repo-root `vercel.json`: `@vercel/python` builds `backend/index.py` and routes `/api/*` to it; `@vercel/static-build` builds `frontend/apps/web` and serves everything else (SPA fallback to `index.html`). Both halves deploy together as one Vercel project (`adaptive-sat`) — every branch push gets one preview URL serving matched frontend+backend, eliminating the CORS/URL-mismatch issues a two-project split used to cause.
 
 ### Frontend structure (`frontend/apps/web/src`)
 

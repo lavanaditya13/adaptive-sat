@@ -1,5 +1,4 @@
 const LOCAL_API_BASE_URL = 'http://localhost:8000';
-const DEPLOYED_API_BASE_URL = 'https://adaptive-sat-backend.vercel.app';
 const LOCAL_HEALTH_CHECK_PATH = '/api/v1/health';
 const LOCAL_HEALTH_CHECK_TIMEOUT_MS = 1000;
 
@@ -22,10 +21,11 @@ async function probeLocalBackend(): Promise<string> {
       return LOCAL_API_BASE_URL;
     }
   } catch {
-    // Local backend isn't running/reachable — fall back to the deployed one.
+    // Local backend isn't running/reachable — fall back to relative /api paths,
+    // which only work if something (e.g. a Vite proxy) is serving them locally.
   }
 
-  return normalize(DEPLOYED_API_BASE_URL);
+  return '';
 }
 
 let baseUrlPromise: Promise<string> | null = null;
@@ -33,10 +33,11 @@ let baseUrlPromise: Promise<string> | null = null;
 // Resolves the API base URL to use, caching the decision for the lifetime of
 // the page load:
 // - An explicit VITE_API_BASE_URL always wins, no probing.
-// - In a real deployed build, always use the deployed backend directly.
+// - In a real deployed build, the frontend and backend are served from the
+//   same Vercel project/origin, so a relative base URL ('') is all we need.
 // - Only when running the frontend locally (`vite dev`, no explicit
-//   override) do we try http://localhost:8000 first, falling back to the
-//   deployed backend if it isn't reachable within LOCAL_HEALTH_CHECK_TIMEOUT_MS.
+//   override) do we try http://localhost:8000 first, falling back to a
+//   relative base URL if it isn't reachable within LOCAL_HEALTH_CHECK_TIMEOUT_MS.
 export function resolveApiBaseUrl(): Promise<string> {
   const explicitBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
@@ -45,7 +46,7 @@ export function resolveApiBaseUrl(): Promise<string> {
   }
 
   if (!import.meta.env.DEV) {
-    return Promise.resolve(normalize(DEPLOYED_API_BASE_URL));
+    return Promise.resolve('');
   }
 
   if (!baseUrlPromise) {
