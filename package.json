@@ -6,6 +6,10 @@
         "dev": "npm run dev --prefix frontend",
         "build": "npm run build --prefix frontend",
         "start": "npm run start --prefix frontend",
-        "lint": "npm run lint --prefix frontend"
+        "lint": "npm run lint --prefix frontend",
+        "dev:all": "./scripts/dev.sh all",
+        "dev:backend": "./scripts/dev.sh backend",
+        "dev:frontend": "./scripts/dev.sh frontend",
+        "dev:stop": "./scripts/dev.sh stop"
     }
 }

@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, ClipboardList, TrendingUp, Flame } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { CheckCircle2, ClipboardList, TrendingUp, Flame, LogOut } from 'lucide-react';
+import { Button } from '@workspace/ui/components/button';
 import { Skeleton } from '@workspace/ui/components/skeleton';
 import { StatCard } from '@/components/dashboard/StatCard/StatCard';
 import { WeakTopicsList } from '@/components/dashboard/WeakTopicsList/WeakTopicsList';
@@ -8,13 +10,19 @@ import { SectionCard } from '@/components/dashboard/SectionCard/SectionCard';
 import { EstimatedScoreCard } from '@/components/dashboard/EstimatedScoreCard/EstimatedScoreCard';
 import { PracticeModal } from '@/components/dashboard/PracticeModal/PracticeModal';
 import { getDashboard } from '@/services/dashboard-service';
+import { logout } from '@/services/auth-service';
+import { useAuthStore } from '@/store/auth-store';
+import { usePracticeSessionStore } from '@/store/practice-session-store';
+import { useResultsStore } from '@/store/results-store';
 import { queryKeys } from '@/constants/query-keys';
+import { ROUTES } from '@/constants/routes';
 import { getApiErrorDetail } from '@/utils/api-errors';
 import type { DashboardResponse } from '@/types/api';
 import {
   GREETING_EYEBROW,
   GREETING_PREFIX,
   GREETING_EXCLAMATION,
+  LOGOUT_LABEL,
   SECTIONS_TITLE,
   QUESTIONS_CORRECT_LABEL,
   QUESTIONS_CORRECT_SUBTEXT_PREFIX,
@@ -30,6 +38,8 @@ import {
 } from './DashboardPage.constants';
 import {
   CONTAINER_STYLES,
+  HEADER_ROW_STYLES,
+  LOGOUT_BUTTON_STYLES,
   GREETING_EYEBROW_STYLES,
   GREETING_STYLES,
   STATS_GRID_STYLES,
@@ -48,6 +58,12 @@ type DashboardSection = DashboardResponse['sections'][number];
 // note: weak_topics has no section_id, so it can't deep-link into topic practice yet without another backend field
 
 export function DashboardPage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const clearUser = useAuthStore((state) => state.clearUser);
+  const resetPracticeSession = usePracticeSessionStore((state) => state.resetSession);
+  const clearResults = useResultsStore((state) => state.clearResults);
+
   const {
     data: dashboard,
     isLoading,
@@ -63,6 +79,19 @@ export function DashboardPage() {
   const handleOpenSection = (section: DashboardSection) => {
     setActiveSection(section);
     setModalKey((key) => key + 1);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } finally {
+      clearUser();
+      resetPracticeSession();
+      clearResults();
+      queryClient.removeQueries({ queryKey: queryKeys.auth.user });
+      queryClient.removeQueries({ queryKey: queryKeys.dashboard.all });
+      navigate(ROUTES.LOGIN);
+    }
   };
 
   if (isLoading) {
@@ -102,13 +131,26 @@ export function DashboardPage() {
 
   return (
     <div className={CONTAINER_STYLES}>
-      <div>
-        <p className={GREETING_EYEBROW_STYLES}>{GREETING_EYEBROW}</p>
-        <h1 className={GREETING_STYLES}>
-          {GREETING_PREFIX}
-          {dashboard.student.full_name}
-          {GREETING_EXCLAMATION}
-        </h1>
+      <div className={HEADER_ROW_STYLES}>
+        <div>
+          <p className={GREETING_EYEBROW_STYLES}>{GREETING_EYEBROW}</p>
+          <h1 className={GREETING_STYLES}>
+            {GREETING_PREFIX}
+            {dashboard.student.full_name}
+            {GREETING_EXCLAMATION}
+          </h1>
+        </div>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className={LOGOUT_BUTTON_STYLES}
+          aria-label={LOGOUT_LABEL}
+          title={LOGOUT_LABEL}
+          onClick={handleLogout}
+        >
+          <LogOut className="size-4" />
+        </Button>
       </div>
 
       <div className={STATS_GRID_STYLES}>

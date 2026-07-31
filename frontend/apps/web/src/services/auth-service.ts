@@ -15,3 +15,12 @@ export async function login(data: LoginFormData): Promise<User> {
   });
   return response.data.user;
 }
+
+export async function getCurrentUser(): Promise<User> {
+  const response = await apiClient.get<User>(API.AUTH.ME);
+  return response.data;
+}
+
+export async function logout(): Promise<void> {
+  await apiClient.post(API.AUTH.LOGOUT);
+}

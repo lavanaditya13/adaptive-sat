@@ -1,9 +1,13 @@
 import axios from 'axios';
-import { API_BASE_URL } from '@/constants/environment';
+import { resolveApiBaseUrl } from '@/constants/environment';
 
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
   withCredentials: true,
+});
+
+apiClient.interceptors.request.use(async (config) => {
+  config.baseURL = await resolveApiBaseUrl();
+  return config;
 });
 
 apiClient.interceptors.response.use(

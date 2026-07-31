@@ -31,12 +31,12 @@ Add a new shadcn/ui component (places files in `packages/ui/src/components`, run
 pnpm dlx shadcn@latest add button -c apps/web
 ```
 
-Env config for `apps/web`: copy `frontend/apps/web/.env.example` to `.env` and set `VITE_API_BASE_URL`. If unset, it falls back to the deployed Vercel backend (`https://adaptive-sat-backend.vercel.app`) — so local frontend dev against a local backend requires setting this explicitly.
+Env config for `apps/web`: copy `frontend/apps/web/.env.example` to `.env` and set `VITE_API_BASE_URL` to override the backend origin explicitly. If unset, `src/constants/environment.ts` resolves it at runtime: in a deployed build it uses the deployed Vercel backend directly; in local dev (`vite dev`) it first probes `http://localhost:8000` (~1s timeout, cached for the page load) and falls back to the deployed backend if nothing answers — so local frontend + local backend just works with no extra config.
 
 ### Backend (run from `backend/`)
 
 ```bash
-poetry install                              # install deps (poetry-project.toml, not pyproject.toml)
+poetry install                              # install deps
 cp .env.example .env                        # configure DATABASE_URL / SECRET_KEY / CORS_ORIGINS
 poetry run uvicorn app.main:app --reload    # dev server at http://localhost:8000 (docs at /docs)
 poetry run alembic upgrade head             # apply migrations
@@ -54,7 +54,11 @@ docker compose up --build          # full stack: API on :8000, Postgres on :5432
 python scripts/seed_sat_questions.py   # seed backend/data/sample_sat_questions_seed.jsonl into the db
 ```
 
-Note: `requirements.txt` at `backend/requirements.txt` is a poetry export kept in sync for Vercel's Python build (Vercel doesn't run Poetry) — it is not the source of truth for dependencies. Edit `poetry-project.toml` first, then re-export.
+Note: `requirements.txt` at `backend/requirements.txt` is a poetry export kept in sync for Vercel's Python build (Vercel doesn't run Poetry) — it is not the source of truth for dependencies. Edit `pyproject.toml` first, then re-export.
+
+### Running both together
+
+`./scripts/dev.sh [backend|frontend|all|stop]` (or `npm run dev:backend` / `dev:frontend` / `dev:all` / `dev:stop` from the repo root) starts either server alone or both together with combined logs streamed to one terminal; `all` is the default and Ctrl+C stops both cleanly. Backend mode uses `poetry run uvicorn` if `backend/.env` exists, otherwise falls back to the Docker-based `backend/scripts/start_backend.sh`.
 
 ## Architecture
 
