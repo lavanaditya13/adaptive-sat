@@ -13,7 +13,7 @@ createRoot(document.getElementById("root")!).render(
     <QueryProvider>
       <BrowserRouter>
         <ToastProvider>
-          <ThemeProvider>
+          <ThemeProvider defaultTheme="dark">
             <App />
           </ThemeProvider>
         </ToastProvider>

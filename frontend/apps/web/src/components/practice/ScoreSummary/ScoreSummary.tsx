@@ -1,24 +1,34 @@
 import { Card } from '@workspace/ui/components/card';
 import { Progress } from '@workspace/ui/components/progress';
 import { Badge } from '@workspace/ui/components/badge';
+import { cn } from '@workspace/ui/lib/utils';
+import { getSectionTheme } from '@/constants/section-theme';
 import type { CompleteResponse } from '@/types/api';
 import {
-  SUMMARY_TITLE,
-  ACCURACY_LABEL,
-  SCORE_LABEL,
   SLASH_SEPARATOR,
   PERCENT_SUFFIX,
+  CORRECT_LABEL,
+  INCORRECT_LABEL,
+  AVG_CONFIDENCE_LABEL,
+  NOT_AVAILABLE,
+  ACCURACY_SEPARATOR,
+  ACCURACY_SUFFIX,
   ADAPTIVE_UNLOCKED_TITLE,
   ADAPTIVE_PROGRESS_TITLE,
   SESSIONS_PROGRESS_SUFFIX,
   UNLOCKED_BADGE_TEXT,
+  getEncouragement,
 } from './ScoreSummary.constants';
 import {
   CARD_STYLES,
-  TITLE_STYLES,
+  SCORE_STYLES,
+  ENCOURAGEMENT_STYLES,
+  SUBTITLE_STYLES,
   STATS_GRID_STYLES,
   STAT_BOX_STYLES,
   STAT_VALUE_STYLES,
+  STAT_VALUE_CORRECT_STYLES,
+  STAT_VALUE_INCORRECT_STYLES,
   STAT_LABEL_STYLES,
   UNLOCK_CONTAINER_STYLES,
   UNLOCK_TITLE_STYLES,
@@ -30,28 +40,45 @@ interface ScoreSummaryProps {
 }
 
 export function ScoreSummary({ result }: ScoreSummaryProps) {
-  const { score, adaptive_unlock } = result;
+  const { score, adaptive_unlock, average_confidence, section, section_display_name } = result;
+  const theme = getSectionTheme(section ?? '');
 
   return (
-    <Card className={CARD_STYLES}>
-      <h2 className={TITLE_STYLES}>{SUMMARY_TITLE}</h2>
+    <Card className={cn(CARD_STYLES, theme.bgSoft)}>
+      <div>
+        <p className={SCORE_STYLES}>
+          {score.correct}
+          {SLASH_SEPARATOR}
+          {score.total}
+        </p>
+        <p className={cn(ENCOURAGEMENT_STYLES, theme.text)}>{getEncouragement(score.percentage)}</p>
+        {section_display_name && (
+          <p className={SUBTITLE_STYLES}>
+            {section_display_name}
+            {ACCURACY_SEPARATOR}
+            {score.percentage}
+            {PERCENT_SUFFIX}
+            {ACCURACY_SUFFIX}
+          </p>
+        )}
+      </div>
 
       <div className={STATS_GRID_STYLES}>
         <div className={STAT_BOX_STYLES}>
-          <p className={STAT_VALUE_STYLES}>
-            {score.percentage}
-            {PERCENT_SUFFIX}
-          </p>
-          <p className={STAT_LABEL_STYLES}>{ACCURACY_LABEL}</p>
+          <p className={cn(STAT_VALUE_STYLES, STAT_VALUE_CORRECT_STYLES)}>{score.correct}</p>
+          <p className={STAT_LABEL_STYLES}>{CORRECT_LABEL}</p>
         </div>
-
+        <div className={STAT_BOX_STYLES}>
+          <p className={cn(STAT_VALUE_STYLES, STAT_VALUE_INCORRECT_STYLES)}>{score.incorrect}</p>
+          <p className={STAT_LABEL_STYLES}>{INCORRECT_LABEL}</p>
+        </div>
         <div className={STAT_BOX_STYLES}>
           <p className={STAT_VALUE_STYLES}>
-            {score.correct}
-            {SLASH_SEPARATOR}
-            {score.total}
+            {average_confidence !== null && average_confidence !== undefined
+              ? average_confidence
+              : NOT_AVAILABLE}
           </p>
-          <p className={STAT_LABEL_STYLES}>{SCORE_LABEL}</p>
+          <p className={STAT_LABEL_STYLES}>{AVG_CONFIDENCE_LABEL}</p>
         </div>
       </div>
 

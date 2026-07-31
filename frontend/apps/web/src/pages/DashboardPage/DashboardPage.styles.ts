@@ -1,10 +1,12 @@
 export const CONTAINER_STYLES = 'max-w-5xl mx-auto p-6 space-y-8';
-export const GREETING_STYLES = 'text-3xl font-bold tracking-tight';
-export const STATS_GRID_STYLES = 'grid grid-cols-1 md:grid-cols-3 gap-4';
+export const GREETING_EYEBROW_STYLES = 'text-sm text-muted-foreground';
+export const GREETING_STYLES = 'font-heading text-3xl font-bold tracking-tight';
+export const STATS_GRID_STYLES = 'grid grid-cols-2 lg:grid-cols-4 gap-4';
 export const SECTIONS_GRID_STYLES = 'grid grid-cols-1 md:grid-cols-2 gap-4';
 export const SECTION_TITLE_STYLES = 'text-xl font-semibold tracking-tight';
 export const SKELETON_GREETING_STYLES = 'h-8 w-64 mb-6';
 export const SKELETON_STAT_STYLES = 'h-24';
+export const SKELETON_SCORE_STYLES = 'h-32';
 export const SKELETON_WEAK_TOPICS_STYLES = 'h-48';
 export const SKELETON_SECTION_TITLE_STYLES = 'h-7 w-32 mb-4';
 export const SKELETON_SECTION_CARD_STYLES = 'h-32';

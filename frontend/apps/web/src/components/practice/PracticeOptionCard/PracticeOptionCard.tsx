@@ -1,22 +1,20 @@
-import { Card } from '@workspace/ui/components/card';
+import { ChevronRight } from 'lucide-react';
 import { Badge } from '@workspace/ui/components/badge';
-import { Button } from '@workspace/ui/components/button';
 import type { PracticeOption } from '@/types/api';
 import {
-  START_BUTTON_TEXT,
   LOCKED_BADGE_TEXT,
   SESSIONS_SUFFIX,
   SLASH_SEPARATOR,
-  STARTING_TEXT,
+  QUESTION_COUNT_SEPARATOR,
+  QUESTIONS_SUFFIX,
 } from './PracticeOptionCard.constants';
 import {
-  CARD_UNLOCKED_STYLES,
-  CARD_LOCKED_STYLES,
+  ROW_UNLOCKED_STYLES,
+  ROW_LOCKED_STYLES,
   HEADER_CONTAINER_STYLES,
   TITLE_STYLES,
   DESCRIPTION_STYLES,
   REQUIREMENT_STYLES,
-  FOOTER_STYLES,
 } from './PracticeOptionCard.styles';
 
 interface PracticeOptionCardProps {
@@ -29,13 +27,23 @@ export function PracticeOptionCard({ option, onStart, isLoading = false }: Pract
   const isLocked = option.is_locked;
 
   return (
-    <Card className={isLocked ? CARD_LOCKED_STYLES : CARD_UNLOCKED_STYLES}>
+    <button
+      type="button"
+      disabled={isLocked || isLoading}
+      onClick={() => onStart(option.mode)}
+      className={isLocked ? ROW_LOCKED_STYLES : ROW_UNLOCKED_STYLES}
+    >
       <div>
         <div className={HEADER_CONTAINER_STYLES}>
           <h3 className={TITLE_STYLES}>{option.title}</h3>
           {isLocked && <Badge variant="secondary">{LOCKED_BADGE_TEXT}</Badge>}
         </div>
-        <p className={DESCRIPTION_STYLES}>{option.description}</p>
+        <p className={DESCRIPTION_STYLES}>
+          {option.description}
+          {QUESTION_COUNT_SEPARATOR}
+          {option.question_count}
+          {QUESTIONS_SUFFIX}
+        </p>
         {isLocked && option.unlock_requirement && (
           <p className={REQUIREMENT_STYLES}>
             {option.unlock_requirement.completed_sessions}
@@ -46,14 +54,7 @@ export function PracticeOptionCard({ option, onStart, isLoading = false }: Pract
         )}
       </div>
 
-      <div className={FOOTER_STYLES}>
-        <Button
-          disabled={isLocked || isLoading}
-          onClick={() => onStart(option.mode)}
-        >
-          {isLoading ? STARTING_TEXT : START_BUTTON_TEXT}
-        </Button>
-      </div>
-    </Card>
+      <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
+    </button>
   );
 }

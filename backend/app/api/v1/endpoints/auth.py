@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, verify_password
+from app.models.user import User
 from app.repositories.user import user_repository
 from app.schemas.auth import (
     AuthUserResponse,
@@ -17,16 +18,45 @@ from app.schemas.auth import (
 router = APIRouter()
 
 
+def _issue_session(response: Response, user: User) -> LoginResponse:
+    """Issue an access token, set the session cookie, and build the auth response."""
+    access_token = create_access_token(user.id)
+    is_production = settings.ENVIRONMENT == "production"
+
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=is_production,
+        samesite="none" if is_production else "lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+
+    return LoginResponse(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=AuthUserResponse(
+            user_id=str(user.id),
+            email=user.email,
+            full_name=user.full_name,
+            role=user.role,
+        ),
+    )
+
+
 @router.post(
     "/signup",
-    response_model=AuthUserResponse,
+    response_model=LoginResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def signup(
     user_in: SignupRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
-    """Register a new user."""
+    """Register a new user and start a session for them."""
     existing_user = await user_repository.get_by_email(
         db,
         email=user_in.email,
@@ -49,12 +79,7 @@ async def signup(
             detail="Invalid password format",
         ) from exc
 
-    return AuthUserResponse(
-        user_id=str(new_user.id),
-        email=new_user.email,
-        full_name=new_user.full_name,
-        role=new_user.role,
-    )
+    return _issue_session(response, new_user)
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -84,30 +109,7 @@ async def login(
             detail="Incorrect email or password",
         )
 
-    access_token = create_access_token(user.id)
-    is_production = settings.ENVIRONMENT == "production"
-
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=is_production,
-        samesite="none" if is_production else "lax",
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        path="/",
-    )
-
-    return LoginResponse(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        user=AuthUserResponse(
-            user_id=str(user.id),
-            email=user.email,
-            full_name=user.full_name,
-            role=user.role,
-        ),
-    )
+    return _issue_session(response, user)
 
 
 @router.post("/refresh", response_model=RefreshResponse)
