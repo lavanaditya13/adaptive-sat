@@ -35,6 +35,16 @@ Env config for `apps/web`: copy `frontend/apps/web/.env.example` to `.env` and s
 
 ### Backend (run from `backend/`)
 
+The actual project file is `backend/poetry-project.toml` (lock: `poetry-project.lock`) — deliberately **not** named `pyproject.toml`, so Vercel's build doesn't auto-detect a Poetry project for `adaptive-sat-backend` and instead uses `requirements.txt` (see commit `d96404c`, "Use requirements file for Vercel backend"). **Never rename these back** — that broke the Vercel backend deployment once already. Since Poetry and the local Dockerfile both hard-require the literal name `pyproject.toml`/`poetry.lock`, this repo instead expects a **local, gitignored symlink** for dev tooling:
+
+```bash
+cd backend
+ln -s poetry-project.toml pyproject.toml
+ln -s poetry-project.lock poetry.lock
+```
+
+(`backend/.gitignore` already excludes `/pyproject.toml` and `/poetry.lock` so these symlinks can never be committed.) With that in place:
+
 ```bash
 poetry install                              # install deps
 cp .env.example .env                        # configure DATABASE_URL / SECRET_KEY / CORS_ORIGINS
@@ -54,7 +64,7 @@ docker compose up --build          # full stack: API on :8000, Postgres on :5432
 python scripts/seed_sat_questions.py   # seed backend/data/sample_sat_questions_seed.jsonl into the db
 ```
 
-Note: `requirements.txt` at `backend/requirements.txt` is a poetry export kept in sync for Vercel's Python build (Vercel doesn't run Poetry) — it is not the source of truth for dependencies. Edit `pyproject.toml` first, then re-export.
+Note: `requirements.txt` at `backend/requirements.txt` is a poetry export kept in sync for Vercel's Python build — it is not the source of truth for dependencies. Edit `poetry-project.toml` first, then re-export (`poetry export -f requirements.txt --output requirements.txt` from within `backend/`, via the symlink setup above).
 
 ### Running both together
 
