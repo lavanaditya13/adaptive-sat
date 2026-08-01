@@ -385,7 +385,7 @@ async def start_practice_session(
         return PracticeStartResponse(
             status=session.status,
             mode=session.mode,
-            question_count=session.question_count,
+            total_questions=session.question_count,
             current_position=None,
             question=None,
         )
@@ -398,7 +398,7 @@ async def start_practice_session(
     return PracticeStartResponse(
         status=session.status,
         mode=session.mode,
-        question_count=session.question_count,
+        total_questions=session.question_count,
         current_position=first_session_question.position,
         question=_public_question(first_question, first_session_question.position),
     )

@@ -38,7 +38,7 @@ def _issue_session(response: Response, user: User) -> LoginResponse:
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         user=AuthUserResponse(
-            user_id=str(user.id),
+            user_id=user.id,
             email=user.email,
             full_name=user.full_name,
             role=user.role,
@@ -116,7 +116,7 @@ async def login(
 async def me(current_user: User = Depends(get_current_user)):
     """Return the current session's user, used by the frontend to check auth on load."""
     return AuthUserResponse(
-        user_id=str(current_user.id),
+        user_id=current_user.id,
         email=current_user.email,
         full_name=current_user.full_name,
         role=current_user.role,

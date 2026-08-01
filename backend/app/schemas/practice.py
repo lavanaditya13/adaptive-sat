@@ -110,7 +110,7 @@ class PracticeQuestionResponse(BaseModel):
 class PracticeStartResponse(BaseModel):
     status: str
     mode: str
-    question_count: int
+    total_questions: int
     current_position: Optional[int] = None
     question: Optional[PublicQuestionResponse] = None
 
