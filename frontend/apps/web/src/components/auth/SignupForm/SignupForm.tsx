@@ -11,14 +11,25 @@ import { useAuthStore } from '@/store/auth-store';
 import { ROUTES } from '@/constants/routes';
 import { getApiErrorDetail } from '@/utils/api-errors';
 import { useToast } from '@/components/toast/toast-provider';
-import { formStyles, inputStyles, buttonStyles, linkStyles, noteStyles } from './SignupForm.styles';
+import {
+  CARD_STYLES,
+  TITLE_STYLES,
+  SUBTITLE_STYLES,
+  formStyles,
+  inputStyles,
+  buttonStyles,
+  linkStyles,
+  noteStyles,
+} from './SignupForm.styles';
 import {
   TITLE,
+  SUBTITLE,
   FULL_NAME_LABEL,
   EMAIL_LABEL,
   PASSWORD_LABEL,
   ROLE_LABEL,
   SUBMIT_LABEL,
+  SUBMITTING_LABEL,
   HAS_ACCOUNT,
   LOGIN_LINK,
   ROLE_STUDENT,
@@ -57,8 +68,9 @@ export function SignupForm() {
   };
 
   return (
-    <div className="w-full max-w-md">
-      <h1 className="text-2xl font-bold mb-6">{TITLE}</h1>
+    <div className={CARD_STYLES}>
+      <h1 className={TITLE_STYLES}>{TITLE}</h1>
+      <p className={SUBTITLE_STYLES}>{SUBTITLE}</p>
 
       <form onSubmit={handleSubmit(onSubmit)} className={formStyles}>
         <div className="space-y-2">
@@ -99,11 +111,11 @@ export function SignupForm() {
         </div>
 
         <Button type="submit" disabled={isSubmitting} className={buttonStyles}>
-          {isSubmitting ? 'Creating account...' : SUBMIT_LABEL}
+          {isSubmitting ? SUBMITTING_LABEL : SUBMIT_LABEL}
         </Button>
       </form>
 
-      <p className="mt-4 text-center">
+      <p className="mt-4 text-center text-sm text-muted-foreground">
         {HAS_ACCOUNT}{' '}
         <button type="button" onClick={() => navigate(ROUTES.LOGIN)} className={linkStyles}>
           {LOGIN_LINK}

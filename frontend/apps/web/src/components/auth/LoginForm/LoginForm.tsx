@@ -10,8 +10,28 @@ import { useAuthStore } from '@/store/auth-store';
 import { ROUTES } from '@/constants/routes';
 import { getApiErrorDetail } from '@/utils/api-errors';
 import { useToast } from '@/components/toast/toast-provider';
-import { formStyles, inputStyles, buttonStyles, linkStyles } from './LoginForm.styles';
-import { TITLE, EMAIL_LABEL, PASSWORD_LABEL, SUBMIT_LABEL, NO_ACCOUNT, SIGNUP_LINK } from './LoginForm.constants';
+import {
+  CARD_STYLES,
+  TITLE_STYLES,
+  SUBTITLE_STYLES,
+  formStyles,
+  inputStyles,
+  LABEL_ROW_STYLES,
+  forgotPasswordStyles,
+  buttonStyles,
+  linkStyles,
+} from './LoginForm.styles';
+import {
+  TITLE,
+  SUBTITLE,
+  EMAIL_LABEL,
+  PASSWORD_LABEL,
+  FORGOT_PASSWORD_LABEL,
+  SUBMIT_LABEL,
+  SUBMITTING_LABEL,
+  NO_ACCOUNT,
+  SIGNUP_LINK,
+} from './LoginForm.constants';
 
 export function LoginForm() {
   const navigate = useNavigate();
@@ -40,8 +60,9 @@ export function LoginForm() {
   };
 
   return (
-    <div className="w-full max-w-md">
-      <h1 className="text-2xl font-bold mb-6">{TITLE}</h1>
+    <div className={CARD_STYLES}>
+      <h1 className={TITLE_STYLES}>{TITLE}</h1>
+      <p className={SUBTITLE_STYLES}>{SUBTITLE}</p>
 
       <form onSubmit={handleSubmit(onSubmit)} className={formStyles}>
         <div className="space-y-2">
@@ -51,17 +72,22 @@ export function LoginForm() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="password">{PASSWORD_LABEL}</Label>
+          <div className={LABEL_ROW_STYLES}>
+            <Label htmlFor="password">{PASSWORD_LABEL}</Label>
+            <span className={forgotPasswordStyles} aria-disabled="true">
+              {FORGOT_PASSWORD_LABEL}
+            </span>
+          </div>
           <Input id="password" type="password" {...register('password')} className={inputStyles} />
           {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
         </div>
 
         <Button type="submit" disabled={isSubmitting} className={buttonStyles}>
-          {isSubmitting ? 'Logging in...' : SUBMIT_LABEL}
+          {isSubmitting ? SUBMITTING_LABEL : SUBMIT_LABEL}
         </Button>
       </form>
 
-      <p className="mt-4 text-center">
+      <p className="mt-4 text-center text-sm text-muted-foreground">
         {NO_ACCOUNT}{' '}
         <button type="button" onClick={() => navigate(ROUTES.SIGNUP)} className={linkStyles}>
           {SIGNUP_LINK}

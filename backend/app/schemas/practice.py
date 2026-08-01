@@ -23,6 +23,7 @@ class SectionPracticeOption(BaseModel):
     title: str
     description: str
     is_locked: bool
+    question_count: int
     unlock_requirement: Optional[UnlockRequirement] = None
 
 
@@ -30,7 +31,6 @@ class TopicActionItem(BaseModel):
     topic_id: int
     name: str
     display_name: str
-    action: str
 
 
 class SectionSelectionResponse(BaseModel):
@@ -46,6 +46,10 @@ class DashboardProgressResponse(BaseModel):
     sessions_completed: int
     questions_answered: int
     accuracy_percentage: float
+    questions_correct: int
+    accuracy_trend_percentage: float
+    avg_session_minutes: float
+    day_streak: int
 
 
 class DashboardWeakTopicResponse(BaseModel):
@@ -58,6 +62,16 @@ class DashboardSectionResponse(BaseModel):
     section_id: int
     name: str
     display_name: str
+    accuracy_percentage: float
+    questions_completed: int
+    topics_count: int
+
+
+class EstimatedScoreResponse(BaseModel):
+    estimated_score: int
+    target_score: int
+    points_to_go: int
+    percent_to_goal: float
 
 
 class StudentDashboardResponse(BaseModel):
@@ -65,6 +79,11 @@ class StudentDashboardResponse(BaseModel):
     progress: DashboardProgressResponse
     weak_topics: list[DashboardWeakTopicResponse]
     sections: list[DashboardSectionResponse]
+    estimated_score: EstimatedScoreResponse
+
+
+class UpdateTargetScoreRequest(BaseModel):
+    target_score: int = Field(ge=400, le=1600)
 
 
 class PracticeStartRequest(BaseModel):
@@ -77,18 +96,21 @@ class PublicQuestionResponse(BaseModel):
     question_id: int
     prompt: str
     choices: dict[str, Any]
+    section: str
+    topic_display_name: str
 
 
 class PracticeQuestionResponse(BaseModel):
     status: str
     current_position: Optional[int] = None
+    total_questions: int
     question: Optional[PublicQuestionResponse] = None
 
 
 class PracticeStartResponse(BaseModel):
     status: str
     mode: str
-    question_count: int
+    total_questions: int
     current_position: Optional[int] = None
     question: Optional[PublicQuestionResponse] = None
 
@@ -119,7 +141,23 @@ class AdaptiveUnlockResponse(BaseModel):
     remaining_sessions: int
 
 
+class QuestionBreakdownItem(BaseModel):
+    question_id: int
+    topic_display_name: str
+    prompt: str
+    choices: dict[str, Any]
+    correct_answer: str
+    selected_answer: Optional[str] = None
+    is_correct: bool
+    confidence_level: Optional[int] = None
+    explanation: Optional[str] = None
+
+
 class PracticeCompleteResponse(BaseModel):
     status: str
     score: ScoreSummary
     adaptive_unlock: Optional[AdaptiveUnlockResponse] = None
+    average_confidence: Optional[float] = None
+    question_breakdown: list[QuestionBreakdownItem] = []
+    section: Optional[str] = None
+    section_display_name: Optional[str] = None

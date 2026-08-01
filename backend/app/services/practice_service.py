@@ -13,20 +13,16 @@ from app.models.attempt import Attempt
 from app.models.practice_context import PracticeContext
 from app.models.practice_session import PracticeSession
 from app.models.practice_session_question import PracticeSessionQuestion
-from app.models.section import Section
 from app.models.question import Question
 from app.models.topic import Topic
 from app.models.user import User
 from app.schemas.practice import (
     AdaptiveUnlockResponse,
-    DashboardSectionResponse,
-    DashboardStudentResponse,
-    DashboardProgressResponse,
-    DashboardWeakTopicResponse,
     PracticeCompleteResponse,
     PracticeQuestionResponse,
     PracticeStartRequest,
     PracticeStartResponse,
+    QuestionBreakdownItem,
     SectionPracticeOption,
     SectionSelectionResponse,
     TopicActionItem,
@@ -35,7 +31,6 @@ from app.schemas.practice import (
     ScoreSummary,
     SubmitAnswerRequest,
     SubmitAnswerResponse,
-    StudentDashboardResponse,
 )
 from app.services.recommendation_service import generate_study_plan_for_student
 from app.services.skill_scoring_service import classify_mistake_type, get_student_progress
@@ -114,7 +109,6 @@ async def _load_section_topics(
                 topic_id=index,
                 name=topic.code,
                 display_name=topic.name,
-                action="Practice Now",
             )
         )
 
@@ -172,12 +166,14 @@ async def set_selected_section(
             title=f"{SECTION_DISPLAY_NAMES[section_code]} Section Practice",
             description=f"Practice questions across the full {SECTION_DISPLAY_NAMES[section_code]} section.",
             is_locked=False,
+            question_count=settings.DEFAULT_PRACTICE_QUESTION_COUNT,
         ),
         SectionPracticeOption(
             mode="adaptive",
             title=f"Adaptive {SECTION_DISPLAY_NAMES[section_code]} Practice",
             description=f"Practice questions selected from your weakest {SECTION_DISPLAY_NAMES[section_code]} areas.",
             is_locked=adaptive_is_locked,
+            question_count=settings.DEFAULT_PRACTICE_QUESTION_COUNT,
             unlock_requirement=(
                 UnlockRequirement(
                     required_sessions=required_sessions,
@@ -203,6 +199,8 @@ def _public_question(question: Question, question_id: int) -> PublicQuestionResp
         question_id=question_id,
         prompt=question.prompt,
         choices=question.choices,
+        section=question.section,
+        topic_display_name=question.topic.name,
     )
 
 
@@ -387,7 +385,7 @@ async def start_practice_session(
         return PracticeStartResponse(
             status=session.status,
             mode=session.mode,
-            question_count=session.question_count,
+            total_questions=session.question_count,
             current_position=None,
             question=None,
         )
@@ -400,7 +398,7 @@ async def start_practice_session(
     return PracticeStartResponse(
         status=session.status,
         mode=session.mode,
-        question_count=session.question_count,
+        total_questions=session.question_count,
         current_position=first_session_question.position,
         question=_public_question(first_question, first_session_question.position),
     )
@@ -417,6 +415,7 @@ async def get_current_question(
         return PracticeQuestionResponse(
             status=session.status,
             current_position=None,
+            total_questions=session.question_count,
             question=None,
         )
 
@@ -448,6 +447,7 @@ async def get_current_question(
         return PracticeQuestionResponse(
             status="ready_to_complete",
             current_position=None,
+            total_questions=session.question_count,
             question=None,
         )
 
@@ -459,6 +459,7 @@ async def get_current_question(
     return PracticeQuestionResponse(
         status=session.status,
         current_position=session_question.position,
+        total_questions=session.question_count,
         question=_public_question(question, session_question.position),
     )
 
@@ -520,6 +521,11 @@ async def submit_answer(
     session_question.status = "answered"
     session_question.answered_at = datetime.now(timezone.utc)
 
+    # autoflush is disabled on this session (see app/core/database.py), so the
+    # status change above must be flushed explicitly before the COUNT query
+    # below, or it undercounts answered questions by one on every submission.
+    await db.flush()
+
     remaining_result = await db.execute(
         select(func.count())
         .select_from(PracticeSessionQuestion)
@@ -576,6 +582,46 @@ async def complete_practice_session(
     total = len(attempts)
     percentage = round((correct / total) * 100, 1) if total else 0.0
 
+    confidence_values = [
+        attempt.confidence_level for attempt in attempts if attempt.confidence_level is not None
+    ]
+    average_confidence = (
+        round(sum(confidence_values) / len(confidence_values), 1) if confidence_values else None
+    )
+
+    breakdown_result = await db.execute(
+        select(PracticeSessionQuestion, Attempt, Question)
+        .join(
+            Attempt,
+            (Attempt.question_id == PracticeSessionQuestion.question_id)
+            & (Attempt.practice_session_id == PracticeSessionQuestion.practice_session_id),
+        )
+        .join(Question, Question.id == PracticeSessionQuestion.question_id)
+        .options(selectinload(Question.topic))
+        .where(PracticeSessionQuestion.practice_session_id == session.id)
+        .order_by(PracticeSessionQuestion.position.asc())
+    )
+
+    question_breakdown = [
+        QuestionBreakdownItem(
+            question_id=question.id,
+            topic_display_name=question.topic.name,
+            prompt=question.prompt,
+            choices=question.choices,
+            correct_answer=attempt.correct_answer,
+            selected_answer=attempt.selected_answer,
+            is_correct=attempt.is_correct,
+            confidence_level=attempt.confidence_level,
+            explanation=question.explanation,
+        )
+        for _session_question, attempt, question in breakdown_result.all()
+    ]
+
+    section_code = SECTION_CODES.get(session.section_id) if session.section_id else None
+    section_display_name = (
+        SECTION_DISPLAY_NAMES.get(section_code) if section_code is not None else None
+    )
+
     adaptive_unlock: AdaptiveUnlockResponse | None = None
 
     if session.mode == "section" and session.section_id is not None:
@@ -613,60 +659,8 @@ async def complete_practice_session(
             percentage=percentage,
         ),
         adaptive_unlock=adaptive_unlock,
-    )
-
-
-async def get_student_dashboard(
-    db: AsyncSession,
-    student_id: int,
-) -> StudentDashboardResponse:
-    student = await db.get(User, student_id)
-
-    if student is None:
-        raise HTTPException(status_code=404, detail="Student not found")
-
-    if student.role != "student":
-        raise HTTPException(status_code=400, detail="User is not a student")
-
-    progress = await get_student_progress(db=db, student_id=student_id)
-
-    sessions_completed_result = await db.execute(
-        select(func.count())
-        .select_from(PracticeSession)
-        .where(
-            PracticeSession.student_id == student_id,
-            PracticeSession.status == "completed",
-        )
-    )
-    sessions_completed = sessions_completed_result.scalar_one()
-
-    sections_result = await db.execute(select(Section).order_by(Section.id.asc()))
-    sections = list(sections_result.scalars().all())
-
-    weak_topics: list[DashboardWeakTopicResponse] = []
-    for index, topic in enumerate(progress.get("weakest_topics", []), start=1):
-        weak_topics.append(
-            DashboardWeakTopicResponse(
-                topic_id=index,
-                display_name=topic["topic_name"],
-                mastery_score=round(topic["accuracy"] * 100, 1),
-            )
-        )
-
-    return StudentDashboardResponse(
-        student=DashboardStudentResponse(full_name=student.full_name or ""),
-        progress=DashboardProgressResponse(
-            sessions_completed=sessions_completed,
-            questions_answered=progress["total_attempted"],
-            accuracy_percentage=round(progress["overall_accuracy"] * 100, 1),
-        ),
-        weak_topics=weak_topics,
-        sections=[
-            DashboardSectionResponse(
-                section_id=section.id,
-                name=section.name,
-                display_name=section.display_name,
-            )
-            for section in sections
-        ],
+        average_confidence=average_confidence,
+        question_breakdown=question_breakdown,
+        section=section_code,
+        section_display_name=section_display_name,
     )

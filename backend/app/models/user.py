@@ -43,6 +43,11 @@ class User(Base):
         default=True,
     )
 
+    target_score: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
     hashed_password: Mapped[str] = mapped_column(
         String(255),
         nullable=False,

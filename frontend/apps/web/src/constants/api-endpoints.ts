@@ -2,6 +2,8 @@ export const API = {
   AUTH: {
     SIGNUP: '/api/v1/auth/signup',
     LOGIN: '/api/v1/auth/login',
+    ME: '/api/v1/auth/me',
+    LOGOUT: '/api/v1/auth/logout',
   },
   DASHBOARD: '/api/v1/dashboard',
   PRACTICE: {

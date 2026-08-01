@@ -5,12 +5,23 @@ interface User {
   role: 'student' | 'parent' | 'tutor';
 }
 
+interface EstimatedScore {
+  estimated_score: number;
+  target_score: number;
+  points_to_go: number;
+  percent_to_goal: number;
+}
+
 interface DashboardResponse {
   student: { full_name: string };
   progress: {
     sessions_completed: number;
     questions_answered: number;
     accuracy_percentage: number;
+    questions_correct: number;
+    accuracy_trend_percentage: number;
+    avg_session_minutes: number;
+    day_streak: number;
   };
   weak_topics: Array<{
     topic_id: number;
@@ -21,7 +32,11 @@ interface DashboardResponse {
     section_id: number;
     name: string;
     display_name: string;
+    accuracy_percentage: number;
+    questions_completed: number;
+    topics_count: number;
   }>;
+  estimated_score: EstimatedScore;
 }
 
 interface PracticeOption {
@@ -29,6 +44,7 @@ interface PracticeOption {
   title: string;
   description: string;
   is_locked: boolean;
+  question_count: number;
   unlock_requirement?: {
     required_sessions: number;
     completed_sessions: number;
@@ -42,7 +58,6 @@ interface SectionContextResponse {
     topic_id: number;
     name: string;
     display_name: string;
-    action: string;
   }>;
 }
 
@@ -50,6 +65,8 @@ interface Question {
   question_id: number;
   prompt: string;
   choices: Record<'A' | 'B' | 'C' | 'D', string>;
+  section: 'math' | 'reading_writing';
+  topic_display_name: string;
 }
 
 interface StartPracticeResponse {
@@ -71,6 +88,18 @@ interface QuestionResponse {
   question: Question;
 }
 
+interface QuestionBreakdownItem {
+  question_id: number;
+  topic_display_name: string;
+  prompt: string;
+  choices: Record<'A' | 'B' | 'C' | 'D', string>;
+  correct_answer: string;
+  selected_answer: string | null;
+  is_correct: boolean;
+  confidence_level: number | null;
+  explanation: string | null;
+}
+
 interface CompleteResponse {
   status: 'completed';
   score: {
@@ -85,6 +114,10 @@ interface CompleteResponse {
     required_sessions: number;
     remaining_sessions: number;
   };
+  average_confidence: number | null;
+  question_breakdown: QuestionBreakdownItem[];
+  section: 'math' | 'reading_writing' | null;
+  section_display_name: string | null;
 }
 
 interface ApiErrorResponse {
@@ -94,6 +127,7 @@ interface ApiErrorResponse {
 
 export type {
   User,
+  EstimatedScore,
   DashboardResponse,
   PracticeOption,
   SectionContextResponse,
@@ -101,6 +135,7 @@ export type {
   StartPracticeResponse,
   AnswerResponse,
   QuestionResponse,
+  QuestionBreakdownItem,
   CompleteResponse,
   ApiErrorResponse,
 };
