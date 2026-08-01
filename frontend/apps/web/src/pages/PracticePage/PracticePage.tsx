@@ -26,9 +26,13 @@ import { useNavigationGuard } from '@/hooks/use-navigation-guard';
 import { ROUTES } from '@/constants/routes';
 import type { ApiErrorResponse } from '@/types/api';
 import {
-  SUBMIT_LABEL,
+  QUESTION_PREFIX,
+  OF_TEXT,
+  PREVIOUS_LABEL,
+  NEXT_LABEL,
+  NEXT_QUESTION_LABEL,
+  FINISH_TEST_LABEL,
   SUBMITTING_LABEL,
-  ANSWER_SAVED_TEXT,
   EXIT_BUTTON_TEXT,
   EXIT_DIALOG_TITLE,
   EXIT_DIALOG_DESCRIPTION,
@@ -37,12 +41,14 @@ import {
   ERROR_SAVING_ANSWER,
 } from './PracticePage.constants';
 import {
+  PAGE_STYLES,
   CONTAINER_STYLES,
   HEADER_STYLES,
+  QUESTION_COUNTER_STYLES,
   CONTENT_STYLES,
   FOOTER_STYLES,
-  FEEDBACK_CONTAINER_STYLES,
-  SUBMIT_BUTTON_STYLES,
+  PREVIOUS_BUTTON_STYLES,
+  NEXT_BUTTON_STYLES,
   EXIT_BUTTON_STYLES,
   LOADING_CONTAINER_STYLES,
   SKELETON_BAR_STYLES,
@@ -58,11 +64,13 @@ export function PracticePage() {
     totalQuestions,
     confidenceLevel,
     selectedAnswer,
-    isAnswerSaved,
+    answeredHistory,
+    reviewIndex,
     setSessionData,
     setSelectedAnswer,
     setConfidenceLevel,
-    setIsAnswerSaved,
+    pushAnsweredQuestion,
+    setReviewIndex,
     resetSession,
   } = usePracticeSessionStore();
 
@@ -74,6 +82,10 @@ export function PracticePage() {
   const [timeSpent, setTimeSpent] = useState(0);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasFetchedInitialQuestion = useRef(false);
+
+  const isReviewing = reviewIndex !== null;
+  const reviewEntry = isReviewing ? answeredHistory[reviewIndex] : null;
 
   const {
     showExitDialog,
@@ -82,8 +94,12 @@ export function PracticePage() {
     handleCancelExit,
   } = useNavigationGuard(!!currentQuestion && !isSubmitting);
 
-  // Timer tracking per question
+  // Timer tracking per question — paused while reviewing a past answer.
   useEffect(() => {
+    if (isReviewing) {
+      return undefined;
+    }
+
     setTimeSpent(0);
     timerRef.current = setInterval(() => {
       setTimeSpent((prev) => prev + 1);
@@ -92,68 +108,72 @@ export function PracticePage() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [currentQuestion?.question_id]);
+  }, [currentQuestion?.question_id, isReviewing]);
 
-  // Initial load check
+  // Initial load check — guarded by a ref (not derived from currentQuestion)
+  // so that resetSession() nulling currentQuestion out after a completed
+  // session doesn't re-trigger a fetch against a session that no longer
+  // exists, racing with the navigate-to-results that just happened.
   useEffect(() => {
-    if (!currentQuestion) {
-      setIsLoading(true);
-      getCurrentQuestion()
-        .then((data) => {
-          setSessionData(data.question, data.current_position, data.total_questions);
-        })
-        .catch(() => {
-          navigate(ROUTES.DASHBOARD);
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
+    if (currentQuestion || hasFetchedInitialQuestion.current) {
+      return;
     }
+
+    hasFetchedInitialQuestion.current = true;
+    setIsLoading(true);
+    getCurrentQuestion()
+      .then((data) => {
+        setSessionData(data.question, data.current_position, data.total_questions);
+      })
+      .catch(() => {
+        navigate(ROUTES.DASHBOARD);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, [currentQuestion, setSessionData, navigate]);
 
   const handleSubmit = async () => {
-    if (!selectedAnswer || isSubmitting) return;
+    if (!selectedAnswer || isSubmitting || !currentQuestion) return;
 
     setErrorMessage(null);
     setIsSubmitting(true);
 
     try {
-      const response = await submitAnswer(
+      const response = await submitAnswer(selectedAnswer, timeSpent, confidenceLevel);
+
+      pushAnsweredQuestion({
+        position: currentPosition,
+        question: currentQuestion,
         selectedAnswer,
-        timeSpent,
-        confidenceLevel
-      );
+        confidenceLevel,
+      });
 
-      setIsAnswerSaved(true);
-
-      // Brief delay so student sees neutral "Answer saved ✓" message
-      setTimeout(async () => {
-        if (response.remaining_questions > 0) {
-          try {
-            const nextQuestionData = await getCurrentQuestion();
-            setSessionData(
-              nextQuestionData.question,
-              nextQuestionData.current_position,
-              nextQuestionData.total_questions
-            );
-          } catch {
-            setErrorMessage(ERROR_SAVING_ANSWER);
-          } finally {
-            setIsSubmitting(false);
-          }
-        } else {
-          try {
-            const completeData = await completePractice();
-            setLatestResult(completeData);
-            resetSession();
-            navigate(ROUTES.RESULTS);
-          } catch {
-            setErrorMessage(ERROR_SAVING_ANSWER);
-          } finally {
-            setIsSubmitting(false);
-          }
+      if (response.remaining_questions > 0) {
+        try {
+          const nextQuestionData = await getCurrentQuestion();
+          setSessionData(
+            nextQuestionData.question,
+            nextQuestionData.current_position,
+            nextQuestionData.total_questions
+          );
+        } catch {
+          setErrorMessage(ERROR_SAVING_ANSWER);
+        } finally {
+          setIsSubmitting(false);
         }
-      }, 600);
+      } else {
+        try {
+          const completeData = await completePractice();
+          setLatestResult(completeData);
+          resetSession();
+          navigate(ROUTES.RESULTS);
+        } catch {
+          setErrorMessage(ERROR_SAVING_ANSWER);
+        } finally {
+          setIsSubmitting(false);
+        }
+      }
     } catch (err: unknown) {
       setIsSubmitting(false);
       if (axios.isAxiosError<ApiErrorResponse>(err)) {
@@ -161,6 +181,29 @@ export function PracticePage() {
       } else {
         setErrorMessage(ERROR_SAVING_ANSWER);
       }
+    }
+  };
+
+  const handlePrevious = () => {
+    if (isReviewing) {
+      if (reviewIndex! > 0) {
+        setReviewIndex(reviewIndex! - 1);
+      }
+      return;
+    }
+
+    if (answeredHistory.length > 0) {
+      setReviewIndex(answeredHistory.length - 1);
+    }
+  };
+
+  const handleNextInReview = () => {
+    if (reviewIndex === null) return;
+
+    if (reviewIndex >= answeredHistory.length - 1) {
+      setReviewIndex(null);
+    } else {
+      setReviewIndex(reviewIndex + 1);
     }
   };
 
@@ -185,60 +228,84 @@ export function PracticePage() {
     return null;
   }
 
+  const displayedQuestion = isReviewing ? reviewEntry!.question : currentQuestion;
+  const displayedSelectedAnswer = isReviewing ? reviewEntry!.selectedAnswer : selectedAnswer;
+  const displayedConfidence = isReviewing ? reviewEntry!.confidenceLevel : confidenceLevel;
+  const displayedPosition = isReviewing ? reviewEntry!.position : currentPosition;
+  const isLastQuestion = currentPosition === totalQuestions;
+  const canGoPrevious = isReviewing ? reviewIndex! > 0 : answeredHistory.length > 0;
+
   return (
-    <div className={CONTAINER_STYLES}>
-      <div className={HEADER_STYLES}>
-        <ProgressBar
-          currentPosition={currentPosition}
-          totalQuestions={totalQuestions}
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          className={EXIT_BUTTON_STYLES}
-          onClick={handleExitClick}
-        >
-          {EXIT_BUTTON_TEXT}
-        </Button>
-      </div>
+    <div className={PAGE_STYLES}>
+      <ProgressBar currentPosition={displayedPosition} totalQuestions={totalQuestions} />
 
-      {errorMessage && (
-        <Alert variant="destructive">
-          <AlertDescription>{errorMessage}</AlertDescription>
-        </Alert>
-      )}
-
-      <div className={CONTENT_STYLES}>
-        <QuestionCard
-          question={currentQuestion}
-          selectedAnswer={selectedAnswer}
-          onSelectAnswer={setSelectedAnswer}
-          disabled={isSubmitting}
-        />
-
-        <ConfidenceSelector
-          confidenceLevel={confidenceLevel}
-          onSelectConfidence={setConfidenceLevel}
-          disabled={isSubmitting}
-        />
-      </div>
-
-      <div className={FOOTER_STYLES}>
-        <div>
-          {isAnswerSaved && (
-            <div className={FEEDBACK_CONTAINER_STYLES}>
-              <span>{ANSWER_SAVED_TEXT}</span>
-            </div>
-          )}
+      <div className={CONTAINER_STYLES}>
+        <div className={HEADER_STYLES}>
+          <span className={QUESTION_COUNTER_STYLES}>
+            {QUESTION_PREFIX}
+            {displayedPosition}
+            {OF_TEXT}
+            {totalQuestions}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={EXIT_BUTTON_STYLES}
+            onClick={handleExitClick}
+          >
+            {EXIT_BUTTON_TEXT}
+          </Button>
         </div>
 
-        <Button
-          className={SUBMIT_BUTTON_STYLES}
-          disabled={!selectedAnswer || isSubmitting}
-          onClick={handleSubmit}
-        >
-          {isSubmitting ? SUBMITTING_LABEL : SUBMIT_LABEL}
-        </Button>
+        {errorMessage && (
+          <Alert variant="destructive">
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className={CONTENT_STYLES}>
+          <QuestionCard
+            question={displayedQuestion}
+            selectedAnswer={displayedSelectedAnswer}
+            onSelectAnswer={setSelectedAnswer}
+            disabled={isReviewing || isSubmitting}
+          />
+
+          <ConfidenceSelector
+            confidenceLevel={displayedConfidence}
+            onSelectConfidence={setConfidenceLevel}
+            disabled={isReviewing || isSubmitting}
+          />
+        </div>
+
+        <div className={FOOTER_STYLES}>
+          <Button
+            variant="ghost"
+            className={PREVIOUS_BUTTON_STYLES}
+            disabled={!canGoPrevious}
+            onClick={handlePrevious}
+          >
+            {PREVIOUS_LABEL}
+          </Button>
+
+          {isReviewing ? (
+            <Button className={NEXT_BUTTON_STYLES} onClick={handleNextInReview}>
+              {NEXT_LABEL}
+            </Button>
+          ) : (
+            <Button
+              className={NEXT_BUTTON_STYLES}
+              disabled={!selectedAnswer || isSubmitting}
+              onClick={handleSubmit}
+            >
+              {isSubmitting
+                ? SUBMITTING_LABEL
+                : isLastQuestion
+                  ? FINISH_TEST_LABEL
+                  : NEXT_QUESTION_LABEL}
+            </Button>
+          )}
+        </div>
       </div>
 
       <Dialog open={showExitDialog} onOpenChange={handleCancelExit}>

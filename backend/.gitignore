@@ -57,3 +57,11 @@ cover/
 
 # Docker
 .docker/
+
+# Local-only symlinks: the real files are poetry-project.toml/.lock (kept
+# under those names deliberately so Vercel's build doesn't auto-detect a
+# Poetry project — see commit d96404c). These symlinks let local `poetry`/
+# Docker tooling, which hard-require the standard filenames, find them
+# without ever touching what's actually committed/deployed.
+/pyproject.toml
+/poetry.lock

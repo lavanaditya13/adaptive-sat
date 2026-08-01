@@ -1,8 +1,8 @@
-export const CARD_UNLOCKED_STYLES = 'p-6 flex flex-col justify-between shadow-sm';
-export const CARD_LOCKED_STYLES =
-  'p-6 flex flex-col justify-between shadow-sm opacity-60 bg-muted/30 border-dashed';
-export const HEADER_CONTAINER_STYLES = 'flex items-start justify-between gap-4 mb-2';
-export const TITLE_STYLES = 'text-lg font-semibold tracking-tight';
-export const DESCRIPTION_STYLES = 'text-sm text-muted-foreground mb-4';
-export const REQUIREMENT_STYLES = 'text-xs font-medium text-amber-600 dark:text-amber-400 mb-4';
-export const FOOTER_STYLES = 'mt-auto pt-2 flex justify-end';
+export const ROW_UNLOCKED_STYLES =
+  'flex w-full items-center justify-between gap-4 rounded-xl bg-card p-4 text-left ring-1 ring-foreground/10 transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50';
+export const ROW_LOCKED_STYLES =
+  'flex w-full items-center justify-between gap-4 rounded-xl border border-dashed border-border bg-muted/20 p-4 text-left opacity-70';
+export const HEADER_CONTAINER_STYLES = 'flex items-center gap-2';
+export const TITLE_STYLES = 'font-medium';
+export const DESCRIPTION_STYLES = 'mt-0.5 text-sm text-muted-foreground';
+export const REQUIREMENT_STYLES = 'mt-1 text-xs font-medium text-amber-600 dark:text-amber-400';

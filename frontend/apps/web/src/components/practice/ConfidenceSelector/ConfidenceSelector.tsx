@@ -1,14 +1,12 @@
 import { Card } from '@workspace/ui/components/card';
-import { Slider } from '@workspace/ui/components/slider';
-import { TITLE, LEVEL_DESCRIPTIONS } from './ConfidenceSelector.constants';
+import { TITLE, NOT_SURE_CAPTION, VERY_CONFIDENT_CAPTION } from './ConfidenceSelector.constants';
 import {
   CARD_STYLES,
-  LABEL_CONTAINER_STYLES,
   TITLE_STYLES,
-  LEVEL_TEXT_STYLES,
   BUTTONS_GRID_STYLES,
   LEVEL_BUTTON_UNSELECTED_STYLES,
   LEVEL_BUTTON_SELECTED_STYLES,
+  CAPTIONS_ROW_STYLES,
 } from './ConfidenceSelector.styles';
 
 interface ConfidenceSelectorProps {
@@ -17,33 +15,19 @@ interface ConfidenceSelectorProps {
   disabled?: boolean;
 }
 
+const LEVELS = [1, 2, 3, 4, 5];
+
 export function ConfidenceSelector({
   confidenceLevel,
   onSelectConfidence,
   disabled = false,
 }: ConfidenceSelectorProps) {
-  const levels = [1, 2, 3, 4, 5];
-
   return (
     <Card className={CARD_STYLES}>
-      <div className={LABEL_CONTAINER_STYLES}>
-        <span className={TITLE_STYLES}>{TITLE}</span>
-        <span className={LEVEL_TEXT_STYLES}>
-          {LEVEL_DESCRIPTIONS[confidenceLevel] || confidenceLevel}
-        </span>
-      </div>
-
-      <Slider
-        min={1}
-        max={5}
-        step={1}
-        value={confidenceLevel}
-        onChange={onSelectConfidence}
-        disabled={disabled}
-      />
+      <span className={TITLE_STYLES}>{TITLE}</span>
 
       <div className={BUTTONS_GRID_STYLES}>
-        {levels.map((level) => (
+        {LEVELS.map((level) => (
           <button
             key={level}
             type="button"
@@ -58,6 +42,11 @@ export function ConfidenceSelector({
             {level}
           </button>
         ))}
+      </div>
+
+      <div className={CAPTIONS_ROW_STYLES}>
+        <span>{NOT_SURE_CAPTION}</span>
+        <span>{VERY_CONFIDENT_CAPTION}</span>
       </div>
     </Card>
   );

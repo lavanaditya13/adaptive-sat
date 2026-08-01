@@ -1,7 +1,10 @@
-export const PAGE_TITLE = 'Practice Session';
-export const SUBMIT_LABEL = 'Submit Answer';
-export const SUBMITTING_LABEL = 'Submitting...';
-export const ANSWER_SAVED_TEXT = 'Answer saved ✓';
+export const QUESTION_PREFIX = 'Question ';
+export const OF_TEXT = ' of ';
+export const PREVIOUS_LABEL = '← Previous';
+export const NEXT_LABEL = 'Next →';
+export const NEXT_QUESTION_LABEL = 'Next Question →';
+export const FINISH_TEST_LABEL = 'Finish Test →';
+export const SUBMITTING_LABEL = 'Saving...';
 export const EXIT_BUTTON_TEXT = 'Exit Session';
 export const EXIT_DIALOG_TITLE = 'Abandon Practice Session?';
 export const EXIT_DIALOG_DESCRIPTION =

@@ -1,0 +1,8 @@
+export const CONTENT_STYLES = 'max-w-lg';
+export const HEADER_ROW_STYLES = 'flex items-center gap-3';
+export const ICON_BADGE_STYLES = 'flex size-10 items-center justify-center rounded-xl';
+export const OPTIONS_LIST_STYLES = 'mt-2 flex flex-col gap-2';
+export const BACK_LINK_STYLES = 'text-sm text-muted-foreground hover:text-foreground';
+export const TOPICS_LIST_STYLES = 'mt-4 flex flex-col gap-2';
+export const SKELETON_ROW_STYLES = 'h-16 w-full';
+export const SKELETON_LIST_STYLES = 'mt-2 flex flex-col gap-2';

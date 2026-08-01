@@ -9,6 +9,10 @@ export const MOCK_DASHBOARD: DashboardResponse = {
     sessions_completed: 12,
     questions_answered: 145,
     accuracy_percentage: 78,
+    questions_correct: 113,
+    accuracy_trend_percentage: 4.2,
+    avg_session_minutes: 25,
+    day_streak: 14,
   },
   weak_topics: [
     { topic_id: 1, display_name: 'Linear Equations in Two Variables', mastery_score: 45 },
@@ -16,9 +20,29 @@ export const MOCK_DASHBOARD: DashboardResponse = {
     { topic_id: 3, display_name: 'Expression Simplification & Factoring', mastery_score: 60 },
   ],
   sections: [
-    { section_id: 1, name: 'math', display_name: 'Math' },
-    { section_id: 2, name: 'reading_writing', display_name: 'Reading & Writing' },
+    {
+      section_id: 1,
+      name: 'math',
+      display_name: 'Math',
+      accuracy_percentage: 82,
+      questions_completed: 148,
+      topics_count: 5,
+    },
+    {
+      section_id: 2,
+      name: 'reading_writing',
+      display_name: 'Reading & Writing',
+      accuracy_percentage: 77,
+      questions_completed: 162,
+      topics_count: 5,
+    },
   ],
+  estimated_score: {
+    estimated_score: 1420,
+    target_score: 1520,
+    points_to_go: 100,
+    percent_to_goal: 93.4,
+  },
 };
 
 export async function getDashboard(): Promise<DashboardResponse> {
