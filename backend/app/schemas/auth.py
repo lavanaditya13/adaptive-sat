@@ -6,6 +6,8 @@ class AuthUserResponse(BaseModel):
     email: EmailStr
     full_name: str | None = None
     role: str
+    email_verified: bool
+    oauth_provider: str | None = None
 
 
 class LoginResponse(BaseModel):
@@ -27,6 +29,10 @@ class LoginRequest(BaseModel):
 
 class AuthResponse(BaseModel):
     user: AuthUserResponse
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
 
 class RefreshRequest(BaseModel):
     refresh_token: str
