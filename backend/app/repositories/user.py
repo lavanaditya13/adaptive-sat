@@ -1,9 +1,12 @@
 from typing import Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+
+from app.core.security import get_password_hash
 from app.models.user import User
 from app.repositories.base import BaseRepository
-from app.core.security import get_password_hash
+
 
 class UserRepository(BaseRepository[User]):
     def __init__(self):
@@ -19,18 +22,25 @@ class UserRepository(BaseRepository[User]):
 
     async def create_user(self, db: AsyncSession, *, obj_in) -> User:
         """
-        Create a new user with password hashing.
+        Create a user with either password credentials or OAuth identity.
         """
+        raw_password = getattr(obj_in, "password", None)
+        hashed_password = get_password_hash(raw_password) if raw_password else None
+
         db_obj = User(
             email=obj_in.email,
-            hashed_password=get_password_hash(obj_in.password),
+            hashed_password=hashed_password,
             full_name=obj_in.full_name,
             role=obj_in.role,
-            is_active=getattr(obj_in, "is_active", True)
+            is_active=getattr(obj_in, "is_active", True),
+            email_verified=getattr(obj_in, "email_verified", False),
+            oauth_provider=getattr(obj_in, "oauth_provider", None),
+            oauth_id=getattr(obj_in, "oauth_id", None),
         )
         db.add(db_obj)
         await db.commit()
         await db.refresh(db_obj)
         return db_obj
+
 
 user_repository = UserRepository()
