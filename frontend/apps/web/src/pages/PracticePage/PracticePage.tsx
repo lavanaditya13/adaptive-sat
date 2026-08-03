@@ -100,6 +100,7 @@ export function PracticePage() {
       return undefined;
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: resets the per-question timer whenever currentQuestion changes
     setTimeSpent(0);
     timerRef.current = setInterval(() => {
       setTimeSpent((prev) => prev + 1);

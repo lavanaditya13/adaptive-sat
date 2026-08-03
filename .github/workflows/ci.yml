@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      # Poetry and the local Dockerfile hard-require the literal names
+      # pyproject.toml/poetry.lock; the repo keeps them as poetry-project.*
+      # so Vercel's build doesn't auto-detect a Poetry project (it uses
+      # requirements.txt instead). See CLAUDE.md.
+      - name: Symlink pyproject.toml / poetry.lock
+        run: |
+          ln -sf poetry-project.toml pyproject.toml
+          ln -sf poetry-project.lock poetry.lock
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      # Vercel's Python build installs from requirements.txt, not Poetry —
+      # if it drifts from poetry-project.lock (e.g. a dependency added via
+      # `poetry add` without re-exporting), the deployed function 500s on
+      # every request until someone notices and fixes it by hand. Catch it
+      # here instead.
+      - name: Verify requirements.txt is in sync with poetry-project.lock
+        run: |
+          poetry export -f requirements.txt --output /tmp/requirements.generated.txt --without-hashes
+          if ! diff -q requirements.txt /tmp/requirements.generated.txt > /dev/null; then
+            echo "::error::backend/requirements.txt is out of sync with poetry-project.lock."
+            echo "Run this locally and commit the result:"
+            echo "  cd backend && poetry export -f requirements.txt --output requirements.txt --without-hashes"
+            echo ""
+            echo "Diff:"
+            diff requirements.txt /tmp/requirements.generated.txt || true
+            exit 1
+          fi
+
+      - name: Run tests
+        run: poetry run pytest
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `npm ci` refuses to run (fails loudly) if package-lock.json is out
+      # of sync with package.json, so this doubles as the drift check.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build

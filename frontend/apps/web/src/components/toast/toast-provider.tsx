@@ -121,6 +121,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook is tightly coupled to ToastProvider, kept in the same file
 export function useToast() {
   const context = useContext(ToastContext);
 
