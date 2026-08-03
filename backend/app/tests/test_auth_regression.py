@@ -16,6 +16,7 @@ def _make_user(*, password: str | None = "hashed", role: str = "student") -> Use
         role=role,
         is_active=True,
         email_verified=False,
+        oauth_provider=None,
         hashed_password=password,
     )
 
@@ -36,6 +37,11 @@ async def test_signup_returns_session_and_user(monkeypatch):
         AsyncMock(return_value=created_user),
     )
     monkeypatch.setattr(auth_module, "create_access_token", lambda user_id: "token-123")
+    monkeypatch.setattr(
+        auth_module,
+        "issue_signup_verification_email",
+        AsyncMock(return_value=None),
+    )
 
     result = await auth_module.signup(
         SimpleNamespace(
