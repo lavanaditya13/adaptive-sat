@@ -1,5 +1,6 @@
 import type {
   User,
+  ConnectedProvidersResponse,
   DashboardResponse,
   SectionContextResponse,
   StartPracticeResponse,
@@ -13,6 +14,15 @@ export const MOCK_USER: User = {
   email: 'student@example.com',
   full_name: 'Alex Student',
   role: 'student',
+  email_verified: false,
+  oauth_provider: null,
+};
+
+export const MOCK_CONNECTED_PROVIDERS: ConnectedProvidersResponse = {
+  providers: [
+    { provider: 'google', linked_at: '2026-06-01T12:00:00Z', email: 'student@example.com' },
+  ],
+  has_password: true,
 };
 
 export const MOCK_DASHBOARD: DashboardResponse = {

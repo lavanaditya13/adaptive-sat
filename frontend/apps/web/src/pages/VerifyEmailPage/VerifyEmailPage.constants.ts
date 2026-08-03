@@ -1,0 +1,13 @@
+export const LOADING_TITLE = 'Verifying your email…';
+export const LOADING_SUBTITLE = 'This will just take a moment.';
+export const SUCCESS_TITLE = 'Email verified';
+export const SUCCESS_SUBTITLE = "You're all set. Taking you to your dashboard…";
+export const ERROR_TITLE = "Couldn't verify your email";
+export const ERROR_SUBTITLE_MISSING_TOKEN = 'This verification link is missing its token.';
+export const RESEND_LABEL = 'Resend verification email';
+export const RESENDING_LABEL = 'Sending…';
+export const RESEND_SUCCESS_TITLE = 'Email sent';
+export const RESEND_SUCCESS_DESCRIPTION = 'Check your inbox for a new verification link.';
+export const RESEND_ERROR_TITLE = 'Could not resend email';
+export const BACK_TO_LOGIN_LABEL = 'Back to login';
+export const REDIRECT_DELAY_MS = 1500;

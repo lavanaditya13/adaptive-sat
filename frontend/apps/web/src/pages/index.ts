@@ -3,3 +3,8 @@ export { SignupPage } from './SignupPage/SignupPage';
 export { DashboardPage } from './DashboardPage/DashboardPage';
 export { PracticePage } from './PracticePage/PracticePage';
 export { ResultsPage } from './ResultsPage/ResultsPage';
+export { CheckEmailPage } from './CheckEmailPage/CheckEmailPage';
+export { VerifyEmailPage } from './VerifyEmailPage/VerifyEmailPage';
+export { OAuthCallbackPage } from './OAuthCallbackPage/OAuthCallbackPage';
+export { SettingsPage } from './SettingsPage/SettingsPage';
+export { LinkAccountsPage } from './LinkAccountsPage/LinkAccountsPage';

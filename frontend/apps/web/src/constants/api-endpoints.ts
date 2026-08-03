@@ -4,6 +4,10 @@ export const API = {
     LOGIN: '/api/v1/auth/login',
     ME: '/api/v1/auth/me',
     LOGOUT: '/api/v1/auth/logout',
+    GOOGLE_START: '/api/v1/auth/google',
+    APPLE_START: '/api/v1/auth/apple',
+    VERIFY_EMAIL: '/api/v1/auth/verify-email',
+    RESEND_VERIFICATION: '/api/v1/auth/resend-verification',
   },
   DASHBOARD: '/api/v1/dashboard',
   PRACTICE: {
@@ -13,7 +17,13 @@ export const API = {
     QUESTION: '/api/v1/practice/question',
     COMPLETE: '/api/v1/practice/complete',
   },
+  SETTINGS: {
+    CONNECTED_PROVIDERS: '/api/v1/settings/connected-providers',
+    LINK_PROVIDER: (provider: 'google' | 'apple') =>
+      `/api/v1/settings/connected-providers/${provider}/start`,
+    UNLINK_PROVIDER: (provider: 'google' | 'apple') =>
+      `/api/v1/settings/connected-providers/${provider}`,
+  },
 } as const;
-
 
 // 192.168.1.10:8000

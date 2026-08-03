@@ -9,6 +9,11 @@ import {
   DashboardPage,
   PracticePage,
   ResultsPage,
+  CheckEmailPage,
+  VerifyEmailPage,
+  OAuthCallbackPage,
+  SettingsPage,
+  LinkAccountsPage,
 } from '@/pages';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -55,6 +60,12 @@ export function App() {
           </GuestRoute>
         }
       />
+      {/* Ungated: reachable regardless of current auth state — a fresh signup,
+          an emailed link click, or an OAuth redirect may land here before (or
+          without ever) establishing client-side session state. */}
+      <Route path={ROUTES.CHECK_EMAIL} element={<CheckEmailPage />} />
+      <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmailPage />} />
+      <Route path={ROUTES.OAUTH_CALLBACK} element={<OAuthCallbackPage />} />
       <Route
         path={ROUTES.DASHBOARD}
         element={
@@ -76,6 +87,22 @@ export function App() {
         element={
           <ProtectedRoute>
             <ResultsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path={ROUTES.SETTINGS}
+        element={
+          <ProtectedRoute>
+            <SettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path={ROUTES.LINK_ACCOUNTS}
+        element={
+          <ProtectedRoute>
+            <LinkAccountsPage />
           </ProtectedRoute>
         }
       />
