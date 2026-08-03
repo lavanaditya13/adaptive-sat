@@ -1,0 +1,9 @@
+export const LOADING_TITLE = 'Finishing sign-in…';
+export const LOADING_SUBTITLE = 'Hang tight while we confirm your account.';
+export const ERROR_TITLE = 'Sign-in failed';
+export const ERROR_SUBTITLE_DEFAULT = "We couldn't complete sign-in with that provider.";
+export const ERROR_REASON_ACCESS_DENIED = 'You cancelled the sign-in request.';
+export const ERROR_REASON_EMAIL_CONFLICT = 'That email is already used by a different account.';
+export const ERROR_REASON_PROVIDER_ERROR = 'The sign-in provider returned an error.';
+export const BACK_TO_LOGIN_LABEL = 'Back to login';
+export const REDIRECT_DELAY_MS = 400;
