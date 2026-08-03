@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str = "change-this-secret-key"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    RESEND_API_KEY: str = ""
 
     # PostgreSQL credentials used when DATABASE_URL is not provided
     POSTGRES_SERVER: str = "localhost"
