@@ -1,5 +1,6 @@
 import {
   MOCK_USER,
+  MOCK_CONNECTED_PROVIDERS,
   MOCK_DASHBOARD,
   MOCK_SECTION_CONTEXT,
   MOCK_QUESTIONS,
@@ -10,6 +11,7 @@ import {
 } from './mock-data';
 import type {
   User,
+  ConnectedProvidersResponse,
   DashboardResponse,
   SectionContextResponse,
   StartPracticeResponse,
@@ -69,5 +71,21 @@ export const mockHandlers = {
 
   getUser: async (): Promise<User> => {
     return MOCK_USER;
+  },
+
+  verifyEmail: async (_token: string): Promise<User> => {
+    return { ...MOCK_USER, email_verified: true };
+  },
+
+  resendVerificationEmail: async (): Promise<void> => {
+    return;
+  },
+
+  getConnectedProviders: async (): Promise<ConnectedProvidersResponse> => {
+    return MOCK_CONNECTED_PROVIDERS;
+  },
+
+  unlinkProvider: async (_provider: 'google' | 'apple'): Promise<void> => {
+    return;
   },
 };

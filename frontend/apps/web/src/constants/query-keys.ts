@@ -5,6 +5,9 @@ export const queryKeys = {
   dashboard: {
     all: ['dashboard'] as const,
   },
+  settings: {
+    connectedProviders: ['settings', 'connected-providers'] as const,
+  },
   practice: {
     sectionContext: (sectionId: number) => ['practice', 'section-context', sectionId] as const,
     currentSession: ['practice', 'current-session'] as const,
