@@ -106,6 +106,12 @@ export function App() {
           </ProtectedRoute>
         }
       />
+      {/* Any unmatched path (stale deep link, unexpected redirect target,
+          typo) lands here instead of a blank screen. */}
+      <Route
+        path="*"
+        element={<Navigate to={isAuthenticated ? ROUTES.DASHBOARD : ROUTES.LOGIN} replace />}
+      />
     </Routes>
   );
 }

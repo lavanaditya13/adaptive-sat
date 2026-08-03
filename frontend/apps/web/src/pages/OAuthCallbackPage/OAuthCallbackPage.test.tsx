@@ -14,6 +14,11 @@ vi.mock('@/store/auth-store', () => ({
     selector({ setUser: setUserMock }),
 }));
 
+const toastMock = vi.fn();
+vi.mock('@/components/toast/toast-provider', () => ({
+  useToast: () => ({ toast: toastMock }),
+}));
+
 function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -30,9 +35,10 @@ describe('OAuthCallbackPage', () => {
   beforeEach(() => {
     vi.mocked(getCurrentUser).mockReset();
     setUserMock.mockReset();
+    toastMock.mockReset();
   });
 
-  it('shows a loading state and confirms the session on mount', async () => {
+  it('shows a loading state, confirms the session, and lands on the dashboard on success', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({
       user_id: 1,
       email: 'a@example.com',
@@ -48,26 +54,31 @@ describe('OAuthCallbackPage', () => {
 
     await waitFor(() => {
       expect(setUserMock).toHaveBeenCalled();
+      expect(screen.getByText('Dashboard')).toBeInTheDocument();
     });
+    expect(toastMock).not.toHaveBeenCalled();
   });
 
-  it('shows an error state immediately when status=error is present', async () => {
+  it('shows an error toast and redirects to login when status=error is present', async () => {
     renderAt('/oauth/callback?status=error&reason=access_denied');
 
     await waitFor(() => {
-      expect(screen.getByText(/sign-in failed/i)).toBeInTheDocument();
-      expect(screen.getByText(/cancelled the sign-in request/i)).toBeInTheDocument();
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ variant: 'destructive', description: expect.stringMatching(/cancelled/i) })
+      );
+      expect(screen.getByText('Login')).toBeInTheDocument();
     });
     expect(getCurrentUser).not.toHaveBeenCalled();
   });
 
-  it('shows an error state if session confirmation fails', async () => {
+  it('shows an error toast and redirects to login if session confirmation fails', async () => {
     vi.mocked(getCurrentUser).mockRejectedValue(new Error('no session'));
 
     renderAt('/oauth/callback');
 
     await waitFor(() => {
-      expect(screen.getByText(/sign-in failed/i)).toBeInTheDocument();
+      expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
+      expect(screen.getByText('Login')).toBeInTheDocument();
     });
   });
 });

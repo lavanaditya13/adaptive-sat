@@ -1,18 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Loader2, XCircle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { getCurrentUser } from '@/services/auth-service';
 import { useAuthStore } from '@/store/auth-store';
+import { useToast } from '@/components/toast/toast-provider';
 import { ROUTES } from '@/constants/routes';
 import {
   CONTAINER_STYLES,
   CARD_STYLES,
   ICON_BADGE_STYLES,
   loadingIconBadgeStyles,
-  errorIconBadgeStyles,
   TITLE_STYLES,
   SUBTITLE_STYLES,
-  linkStyles,
 } from './OAuthCallbackPage.styles';
 import {
   LOADING_TITLE,
@@ -22,8 +21,6 @@ import {
   ERROR_REASON_ACCESS_DENIED,
   ERROR_REASON_EMAIL_CONFLICT,
   ERROR_REASON_PROVIDER_ERROR,
-  BACK_TO_LOGIN_LABEL,
-  REDIRECT_DELAY_MS,
 } from './OAuthCallbackPage.constants';
 
 const REASON_MESSAGES: Record<string, string> = {
@@ -36,12 +33,10 @@ export function OAuthCallbackPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const setUser = useAuthStore((state) => state.setUser);
+  const { toast } = useToast();
   const statusParam = searchParams.get('status');
   const reasonParam = searchParams.get('reason');
-  const [hasError, setHasError] = useState(() => statusParam === 'error');
   const hasRunRef = useRef(false);
-
-  const errorMessage = reasonParam ? (REASON_MESSAGES[reasonParam] ?? ERROR_SUBTITLE_DEFAULT) : ERROR_SUBTITLE_DEFAULT;
 
   useEffect(() => {
     if (hasRunRef.current) {
@@ -49,36 +44,25 @@ export function OAuthCallbackPage() {
     }
     hasRunRef.current = true;
 
+    const failWithToast = (description: string) => {
+      toast({ title: ERROR_TITLE, description, variant: 'destructive' });
+      navigate(ROUTES.LOGIN, { replace: true });
+    };
+
     if (statusParam === 'error') {
+      failWithToast(reasonParam ? (REASON_MESSAGES[reasonParam] ?? ERROR_SUBTITLE_DEFAULT) : ERROR_SUBTITLE_DEFAULT);
       return;
     }
 
     getCurrentUser()
       .then((user) => {
         setUser(user);
-        window.setTimeout(() => navigate(ROUTES.DASHBOARD), REDIRECT_DELAY_MS);
+        navigate(ROUTES.DASHBOARD, { replace: true });
       })
       .catch(() => {
-        setHasError(true);
+        failWithToast(ERROR_SUBTITLE_DEFAULT);
       });
-  }, [statusParam, setUser, navigate]);
-
-  if (hasError) {
-    return (
-      <div className={CONTAINER_STYLES}>
-        <div className={CARD_STYLES}>
-          <div className={`${ICON_BADGE_STYLES} ${errorIconBadgeStyles}`}>
-            <XCircle className="size-6" />
-          </div>
-          <h1 className={TITLE_STYLES}>{ERROR_TITLE}</h1>
-          <p className={SUBTITLE_STYLES}>{errorMessage}</p>
-          <button type="button" onClick={() => navigate(ROUTES.LOGIN)} className={linkStyles}>
-            {BACK_TO_LOGIN_LABEL}
-          </button>
-        </div>
-      </div>
-    );
-  }
+  }, [statusParam, reasonParam, setUser, navigate, toast]);
 
   return (
     <div className={CONTAINER_STYLES}>
