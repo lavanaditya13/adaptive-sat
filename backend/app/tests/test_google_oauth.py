@@ -53,6 +53,7 @@ async def test_google_callback_creates_new_google_user(monkeypatch, google_profi
     monkeypatch.setattr(auth_module.settings, "GOOGLE_CLIENT_ID", "client-id")
     monkeypatch.setattr(auth_module.settings, "GOOGLE_CLIENT_SECRET", "client-secret")
     monkeypatch.setattr(auth_module.settings, "GOOGLE_REDIRECT_URI", "http://localhost:8000/api/v1/auth/google/callback")
+    monkeypatch.setattr(auth_module.settings, "FRONTEND_URL", "http://localhost:5173")
     monkeypatch.setattr(auth_module, "create_access_token", lambda user_id: "session-token")
     monkeypatch.setattr(
         oauth_service.requests,
@@ -132,6 +133,7 @@ async def test_google_callback_links_existing_password_user(monkeypatch, google_
     monkeypatch.setattr(auth_module.settings, "GOOGLE_CLIENT_ID", "client-id")
     monkeypatch.setattr(auth_module.settings, "GOOGLE_CLIENT_SECRET", "client-secret")
     monkeypatch.setattr(auth_module.settings, "GOOGLE_REDIRECT_URI", "http://localhost:8000/api/v1/auth/google/callback")
+    monkeypatch.setattr(auth_module.settings, "FRONTEND_URL", "http://localhost:5173")
     monkeypatch.setattr(auth_module, "create_access_token", lambda user_id: "session-token")
     monkeypatch.setattr(
         oauth_service.requests,
