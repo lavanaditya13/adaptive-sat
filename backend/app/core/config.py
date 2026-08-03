@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     RESEND_API_KEY: str = ""
     FRONTEND_URL: str = "http://localhost:5173"
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
+    APPLE_CLIENT_ID: str = ""
+    APPLE_TEAM_ID: str = ""
+    APPLE_KEY_ID: str = ""
+    APPLE_PRIVATE_KEY: str = ""
+    APPLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/apple/callback"
 
     # PostgreSQL credentials used when DATABASE_URL is not provided
     POSTGRES_SERVER: str = "localhost"
