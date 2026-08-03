@@ -89,6 +89,7 @@ async def test_google_callback_creates_new_google_user(monkeypatch, google_profi
 
     state = oauth_service._create_oauth_state(provider="google", intent="login")
     response = await auth_module.google_callback(
+        request=SimpleNamespace(cookies={}),
         code="oauth-code",
         state=state,
         db=SimpleNamespace(),
@@ -172,6 +173,7 @@ async def test_google_callback_links_existing_password_user(monkeypatch, google_
 
     state = oauth_service._create_oauth_state(provider="google", intent="login")
     response = await auth_module.google_callback(
+        request=SimpleNamespace(cookies={}),
         code="oauth-code",
         state=state,
         db=SimpleNamespace(),
