@@ -2,7 +2,7 @@ from pydantic import BaseModel, EmailStr
 
 
 class AuthUserResponse(BaseModel):
-    user_id: str
+    user_id: int
     email: EmailStr
     full_name: str | None = None
     role: str
