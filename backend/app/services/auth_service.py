@@ -128,4 +128,14 @@ async def resend_verification_email(db: AsyncSession, user: User) -> bool:
 
 
 async def issue_signup_verification_email(user: User) -> None:
-    await send_verification_email(user)
+    try:
+        await send_verification_email(user)
+    except HTTPException as exc:
+        # In local/dev/test environments we do not block signup if only the
+        # transactional email provider is not configured.
+        if (
+            settings.ENVIRONMENT != "production"
+            and "RESEND_API_KEY is not configured" in str(exc.detail)
+        ):
+            return
+        raise

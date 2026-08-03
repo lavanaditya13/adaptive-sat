@@ -4,6 +4,7 @@ from app.schemas.question import QuestionBase, QuestionCreate, QuestionUpdate, Q
 from app.schemas.attempt import AttemptBase, AttemptCreate, AttemptUpdate, AttemptResponse
 from app.schemas.study_plan import StudyPlanBase, StudyPlanCreate, StudyPlanUpdate, StudyPlanResponse
 from app.schemas.auth import SignupRequest, LoginRequest, AuthResponse, RefreshRequest, RefreshResponse
+from app.schemas.settings import ConnectedProviderItem, ConnectedProvidersResponse
 from app.schemas.practice import (
     AdaptiveUnlockResponse,
     PracticeStartRequest,
@@ -53,6 +54,8 @@ __all__ = [
     "AuthResponse",
     "RefreshRequest",
     "RefreshResponse",
+    "ConnectedProviderItem",
+    "ConnectedProvidersResponse",
     "SectionSelectionRequest",
     "SectionPracticeOption",
     "UnlockRequirement",
