@@ -48,9 +48,26 @@ class User(Base):
         nullable=True,
     )
 
-    hashed_password: Mapped[str] = mapped_column(
-        String(255),
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean,
         nullable=False,
+        default=False,
+        server_default="false",
+    )
+
+    oauth_provider: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    oauth_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    hashed_password: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
