@@ -94,7 +94,7 @@ async def login(
         email=credentials.email,
     )
 
-    if not user or not verify_password(
+    if not user or not user.hashed_password or not verify_password(
         credentials.password,
         user.hashed_password,
     ):
