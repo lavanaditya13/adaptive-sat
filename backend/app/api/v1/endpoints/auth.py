@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -13,6 +14,16 @@ from app.services.auth_service import (
     VerificationTokenExpiredError,
     VerificationTokenInvalidError,
 )
+from app.services.oauth_service import (
+    OAuthConfigurationError,
+    OAuthProviderError,
+    OAuthStateExpiredError,
+    OAuthStateInvalidError,
+    build_apple_authorization_url,
+    build_google_authorization_url,
+    complete_apple_oauth,
+    complete_google_oauth,
+)
 from app.schemas.auth import (
     AuthUserResponse,
     AuthResponse,
@@ -25,6 +36,13 @@ from app.schemas.auth import (
 )
 
 router = APIRouter()
+
+
+def _frontend_oauth_callback_url(status_value: str | None = None, reason: str | None = None) -> str:
+    base_url = settings.FRONTEND_URL.rstrip("/")
+    if status_value == "error":
+        return f"{base_url}/oauth/callback?status=error&reason={reason or 'provider_error'}"
+    return f"{base_url}/oauth/callback"
 
 
 def _issue_session(response: Response, user: User) -> LoginResponse:
@@ -93,6 +111,36 @@ async def signup(
     await issue_signup_verification_email(new_user)
 
     return _issue_session(response, new_user)
+
+
+@router.get("/google")
+async def google_start(
+    intent: str = Query(default="login", pattern="^(login|signup|link)$"),
+):
+    try:
+        google_url = build_google_authorization_url(intent=intent)
+    except OAuthConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+
+    return RedirectResponse(url=google_url, status_code=status.HTTP_302_FOUND)
+
+
+@router.get("/apple")
+async def apple_start(
+    intent: str = Query(default="login", pattern="^(login|signup|link)$"),
+):
+    try:
+        apple_url = build_apple_authorization_url(intent=intent)
+    except OAuthConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+
+    return RedirectResponse(url=apple_url, status_code=status.HTTP_302_FOUND)
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -166,6 +214,93 @@ async def verify_email_endpoint(
             oauth_provider=user.oauth_provider,
         )
     )
+
+
+@router.get("/google/callback")
+async def google_callback(
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    if error:
+        reason = "access_denied" if error == "access_denied" else "provider_error"
+        return RedirectResponse(
+            url=_frontend_oauth_callback_url(status_value="error", reason=reason),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    if not code or not state:
+        return RedirectResponse(
+            url=_frontend_oauth_callback_url(status_value="error", reason="provider_error"),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    try:
+        user = await complete_google_oauth(db, code=code, state=state)
+    except (OAuthStateExpiredError, OAuthStateInvalidError, OAuthProviderError):
+        return RedirectResponse(
+            url=_frontend_oauth_callback_url(status_value="error", reason="provider_error"),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    redirect_response = RedirectResponse(
+        url=_frontend_oauth_callback_url(),
+        status_code=status.HTTP_302_FOUND,
+    )
+    _issue_session(redirect_response, user)
+    return redirect_response
+
+
+@router.api_route("/apple/callback", methods=["GET", "POST"])
+async def apple_callback(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    code = request.query_params.get("code")
+    state = request.query_params.get("state")
+    error = request.query_params.get("error")
+    user_payload = request.query_params.get("user")
+
+    if request.method == "POST":
+        form = await request.form()
+        code = form.get("code") or code
+        state = form.get("state") or state
+        error = form.get("error") or error
+        user_payload = form.get("user") or user_payload
+
+    if error:
+        reason = "access_denied" if error == "access_denied" else "provider_error"
+        return RedirectResponse(
+            url=_frontend_oauth_callback_url(status_value="error", reason=reason),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    if not code or not state:
+        return RedirectResponse(
+            url=_frontend_oauth_callback_url(status_value="error", reason="provider_error"),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    try:
+        user = await complete_apple_oauth(
+            db,
+            code=str(code),
+            state=str(state),
+            user_payload=str(user_payload) if user_payload else None,
+        )
+    except (OAuthStateExpiredError, OAuthStateInvalidError, OAuthProviderError):
+        return RedirectResponse(
+            url=_frontend_oauth_callback_url(status_value="error", reason="provider_error"),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    redirect_response = RedirectResponse(
+        url=_frontend_oauth_callback_url(),
+        status_code=status.HTTP_302_FOUND,
+    )
+    _issue_session(redirect_response, user)
+    return redirect_response
 
 
 @router.post("/resend-verification", status_code=status.HTTP_204_NO_CONTENT)
