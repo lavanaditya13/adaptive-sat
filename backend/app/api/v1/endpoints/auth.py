@@ -16,13 +16,13 @@ from app.services.auth_service import (
 )
 from app.services.oauth_service import (
     OAuthConfigurationError,
+    OAuthProviderConflictError,
     OAuthProviderError,
     OAuthStateExpiredError,
     OAuthStateInvalidError,
-    build_apple_authorization_url,
     build_google_authorization_url,
-    complete_apple_oauth,
     complete_google_oauth,
+    get_oauth_intent,
 )
 from app.schemas.auth import (
     AuthUserResponse,
@@ -128,21 +128,6 @@ async def google_start(
     return RedirectResponse(url=google_url, status_code=status.HTTP_302_FOUND)
 
 
-@router.get("/apple")
-async def apple_start(
-    intent: str = Query(default="login", pattern="^(login|signup|link)$"),
-):
-    try:
-        apple_url = build_apple_authorization_url(intent=intent)
-    except OAuthConfigurationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc),
-        ) from exc
-
-    return RedirectResponse(url=apple_url, status_code=status.HTTP_302_FOUND)
-
-
 @router.post("/login", response_model=LoginResponse)
 async def login(
     credentials: LoginRequest,
@@ -218,6 +203,7 @@ async def verify_email_endpoint(
 
 @router.get("/google/callback")
 async def google_callback(
+    request: Request,
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
@@ -237,57 +223,31 @@ async def google_callback(
         )
 
     try:
-        user = await complete_google_oauth(db, code=code, state=state)
-    except (OAuthStateExpiredError, OAuthStateInvalidError, OAuthProviderError):
-        return RedirectResponse(
-            url=_frontend_oauth_callback_url(status_value="error", reason="provider_error"),
-            status_code=status.HTTP_302_FOUND,
-        )
+        intent = get_oauth_intent(state, provider="google")
+        linking_user: User | None = None
 
-    redirect_response = RedirectResponse(
-        url=_frontend_oauth_callback_url(),
-        status_code=status.HTTP_302_FOUND,
-    )
-    _issue_session(redirect_response, user)
-    return redirect_response
+        if intent == "link":
+            try:
+                linking_user = await get_current_user(
+                    access_token=request.cookies.get("access_token"),
+                    db=db,
+                )
+            except HTTPException:
+                return RedirectResponse(
+                    url=_frontend_oauth_callback_url(status_value="error", reason="provider_error"),
+                    status_code=status.HTTP_302_FOUND,
+                )
 
-
-@router.api_route("/apple/callback", methods=["GET", "POST"])
-async def apple_callback(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    code = request.query_params.get("code")
-    state = request.query_params.get("state")
-    error = request.query_params.get("error")
-    user_payload = request.query_params.get("user")
-
-    if request.method == "POST":
-        form = await request.form()
-        code = form.get("code") or code
-        state = form.get("state") or state
-        error = form.get("error") or error
-        user_payload = form.get("user") or user_payload
-
-    if error:
-        reason = "access_denied" if error == "access_denied" else "provider_error"
-        return RedirectResponse(
-            url=_frontend_oauth_callback_url(status_value="error", reason=reason),
-            status_code=status.HTTP_302_FOUND,
-        )
-
-    if not code or not state:
-        return RedirectResponse(
-            url=_frontend_oauth_callback_url(status_value="error", reason="provider_error"),
-            status_code=status.HTTP_302_FOUND,
-        )
-
-    try:
-        user = await complete_apple_oauth(
+        user = await complete_google_oauth(
             db,
-            code=str(code),
-            state=str(state),
-            user_payload=str(user_payload) if user_payload else None,
+            code=code,
+            state=state,
+            current_user=linking_user,
+        )
+    except OAuthProviderConflictError:
+        return RedirectResponse(
+            url=_frontend_oauth_callback_url(status_value="error", reason="email_conflict"),
+            status_code=status.HTTP_302_FOUND,
         )
     except (OAuthStateExpiredError, OAuthStateInvalidError, OAuthProviderError):
         return RedirectResponse(
