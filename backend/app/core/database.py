@@ -1,13 +1,23 @@
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 from app.core.config import settings
 
-# Create async engine
+# NullPool: DATABASE_URL is Neon's pooled (PgBouncer) endpoint, which already
+# handles connection pooling server-side. SQLAlchemy's default pool would add
+# a second, client-side pool on top of it — on Vercel, a "warm" serverless
+# instance can keep that local pool alive across invocations, but Neon can
+# close the underlying server-side connection while it sits idle in between,
+# leaving a stale connection SQLAlchemy hands out without checking (surfaces
+# as `asyncpg.exceptions.InterfaceError: connection is closed`). NullPool
+# opens a fresh connection per checkout instead of reusing one, which is safe
+# here since PgBouncer makes that cheap.
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=True if settings.ENVIRONMENT == "development" else False,
-    future=True
+    future=True,
+    poolclass=NullPool,
 )
 
 # Async session factory
