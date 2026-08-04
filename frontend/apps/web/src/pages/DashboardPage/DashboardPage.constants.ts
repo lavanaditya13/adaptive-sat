@@ -2,6 +2,7 @@ export const GREETING_PREFIX = 'Hey, ';
 export const GREETING_EXCLAMATION = ' 👋';
 export const GREETING_EYEBROW = 'Good afternoon';
 export const LOGOUT_LABEL = 'Log out';
+export const SETTINGS_LABEL = 'Settings';
 export const SECTIONS_TITLE = 'Practice Sections';
 export const QUESTIONS_CORRECT_LABEL = 'Questions Correct';
 export const QUESTIONS_CORRECT_SUBTEXT_PREFIX = 'of ';

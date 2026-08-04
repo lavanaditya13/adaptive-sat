@@ -21,7 +21,6 @@ describe('LinkAccountsPage', () => {
 
     expect(screen.getByText(/add a sign-in method/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /continue with apple/i })).toBeInTheDocument();
     expect(screen.queryByText(/or continue with email/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /back to settings/i })).toBeInTheDocument();
   });

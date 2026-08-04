@@ -1,6 +1,8 @@
 export const CONTAINER_STYLES = 'max-w-5xl mx-auto p-6 space-y-8';
 export const HEADER_ROW_STYLES = 'flex items-start justify-between gap-4';
+export const HEADER_ACTIONS_STYLES = 'flex items-center gap-1';
 export const LOGOUT_BUTTON_STYLES = 'text-muted-foreground hover:text-foreground';
+export const SETTINGS_BUTTON_STYLES = 'text-muted-foreground hover:text-foreground';
 export const GREETING_EYEBROW_STYLES = 'text-sm text-muted-foreground';
 export const GREETING_STYLES = 'font-heading text-3xl font-bold tracking-tight';
 export const STATS_GRID_STYLES = 'grid grid-cols-2 lg:grid-cols-4 gap-4';

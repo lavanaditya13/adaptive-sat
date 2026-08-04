@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@workspace/ui/components/button';
-import { GoogleIcon, AppleIcon } from '@/components/auth/OAuthButtons/OAuthButtons';
+import { GoogleIcon } from '@/components/auth/OAuthButtons/OAuthButtons';
 import { unlinkProvider } from '@/services/settings-service';
 import { useToast } from '@/components/toast/toast-provider';
 import { getApiErrorDetail } from '@/utils/api-errors';
@@ -16,7 +16,6 @@ import {
 } from './ConnectedProvidersList.styles';
 import {
   GOOGLE_DISPLAY_NAME,
-  APPLE_DISPLAY_NAME,
   DISCONNECT_LABEL,
   DISCONNECTING_LABEL,
   LAST_METHOD_TOOLTIP,
@@ -28,21 +27,20 @@ import {
 interface ConnectedProvidersListProps {
   providers: ConnectedProvider[];
   hasPassword: boolean;
-  onUnlinked: (provider: 'google' | 'apple') => void;
+  onUnlinked: (provider: 'google') => void;
 }
 
-const PROVIDER_DISPLAY_NAME: Record<'google' | 'apple', string> = {
+const PROVIDER_DISPLAY_NAME: Record<'google', string> = {
   google: GOOGLE_DISPLAY_NAME,
-  apple: APPLE_DISPLAY_NAME,
 };
 
 export function ConnectedProvidersList({ providers, hasPassword, onUnlinked }: ConnectedProvidersListProps) {
   const { toast } = useToast();
-  const [pendingProvider, setPendingProvider] = useState<'google' | 'apple' | null>(null);
+  const [pendingProvider, setPendingProvider] = useState<'google' | null>(null);
 
   const isOnlyAuthMethod = !hasPassword && providers.length === 1;
 
-  const handleDisconnect = async (provider: 'google' | 'apple') => {
+  const handleDisconnect = async (provider: 'google') => {
     setPendingProvider(provider);
     try {
       await unlinkProvider(provider);
@@ -68,7 +66,7 @@ export function ConnectedProvidersList({ providers, hasPassword, onUnlinked }: C
           <div key={connection.provider} className={ROW_STYLES}>
             <div className={PROVIDER_INFO_STYLES}>
               <span className={ICON_BADGE_STYLES}>
-                {connection.provider === 'google' ? <GoogleIcon /> : <AppleIcon />}
+                <GoogleIcon />
               </span>
               <div>
                 <p className={PROVIDER_NAME_STYLES}>{PROVIDER_DISPLAY_NAME[connection.provider]}</p>

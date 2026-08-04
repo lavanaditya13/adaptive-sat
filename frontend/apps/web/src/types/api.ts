@@ -4,11 +4,11 @@ interface User {
   full_name: string;
   role: 'student' | 'parent' | 'tutor';
   email_verified: boolean;
-  oauth_provider: 'google' | 'apple' | null;
+  oauth_provider: 'google' | null;
 }
 
 interface ConnectedProvider {
-  provider: 'google' | 'apple';
+  provider: 'google';
   linked_at: string;
   email: string | null;
 }

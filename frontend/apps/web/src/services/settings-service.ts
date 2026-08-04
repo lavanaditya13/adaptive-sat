@@ -20,7 +20,7 @@ export async function getConnectedProviders(): Promise<ConnectedProvidersRespons
   }
 }
 
-export async function unlinkProvider(provider: 'google' | 'apple'): Promise<void> {
+export async function unlinkProvider(provider: 'google'): Promise<void> {
   try {
     await apiClient.delete(API.SETTINGS.UNLINK_PROVIDER(provider));
   } catch (error) {

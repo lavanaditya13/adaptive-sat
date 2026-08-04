@@ -26,11 +26,10 @@ describe('OAuthButtons', () => {
     });
   });
 
-  it('renders Google and Apple buttons plus the divider by default', () => {
+  it('renders the Google button plus the divider by default', () => {
     render(<OAuthButtons intent="login" />);
 
     expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /continue with apple/i })).toBeInTheDocument();
     expect(screen.getByText(/or continue with email/i)).toBeInTheDocument();
   });
 
@@ -53,20 +52,7 @@ describe('OAuthButtons', () => {
     });
   });
 
-  it('redirects to the resolved Apple OAuth URL', async () => {
-    vi.mocked(getOAuthStartUrl).mockResolvedValue('https://api.example.com/api/v1/auth/apple?intent=login');
-    const user = userEvent.setup();
-
-    render(<OAuthButtons intent="login" />);
-    await user.click(screen.getByRole('button', { name: /continue with apple/i }));
-
-    await waitFor(() => {
-      expect(getOAuthStartUrl).toHaveBeenCalledWith('apple', 'login');
-      expect(window.location.href).toBe('https://api.example.com/api/v1/auth/apple?intent=login');
-    });
-  });
-
-  it('shows an error toast and re-enables the buttons if resolving the OAuth URL fails', async () => {
+  it('shows an error toast and re-enables the button if resolving the OAuth URL fails', async () => {
     vi.mocked(getOAuthStartUrl).mockRejectedValue(new Error('network down'));
     const user = userEvent.setup();
 

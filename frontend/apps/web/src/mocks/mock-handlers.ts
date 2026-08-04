@@ -85,7 +85,7 @@ export const mockHandlers = {
     return MOCK_CONNECTED_PROVIDERS;
   },
 
-  unlinkProvider: async (_provider: 'google' | 'apple'): Promise<void> => {
+  unlinkProvider: async (_provider: 'google'): Promise<void> => {
     return;
   },
 };

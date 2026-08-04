@@ -28,17 +28,16 @@ export async function logout(): Promise<void> {
   await apiClient.post(API.AUTH.LOGOUT);
 }
 
-// Full-page redirect target for "Continue with Google/Apple" — not mock-wrapped
-// (a real OAuth handshake can't be faked), so this hits the backend directly and
-// 404s until SCRUM-22/23 ship. `intent=link` is used by the authenticated
-// "add a sign-in method" flow instead of login/signup.
+// Full-page redirect target for "Continue with Google" — not mock-wrapped (a
+// real OAuth handshake can't be faked), so this hits the backend directly.
+// `intent=link` is used by the authenticated "add a sign-in method" flow
+// instead of login/signup.
 export async function getOAuthStartUrl(
-  provider: 'google' | 'apple',
+  provider: 'google',
   intent: 'login' | 'signup' | 'link' = 'login'
 ): Promise<string> {
   const baseUrl = await resolveApiBaseUrl();
-  const path = provider === 'google' ? API.AUTH.GOOGLE_START : API.AUTH.APPLE_START;
-  return `${baseUrl}${path}?intent=${intent}`;
+  return `${baseUrl}${API.AUTH.GOOGLE_START}?intent=${intent}`;
 }
 
 export async function verifyEmail(token: string): Promise<User> {
