@@ -5,20 +5,17 @@ import { useToast } from '@/components/toast/toast-provider';
 import {
   CONTAINER_STYLES,
   googleButtonStyles,
-  appleButtonStyles,
   dividerRowStyles,
   dividerLineStyles,
   dividerLabelStyles,
 } from './OAuthButtons.styles';
 import {
   GOOGLE_LABEL,
-  APPLE_LABEL,
   DIVIDER_LABEL,
   REDIRECT_ERROR_TITLE,
   REDIRECT_ERROR_DESCRIPTION,
 } from './OAuthButtons.constants';
 
-type OAuthProvider = 'google' | 'apple';
 type OAuthIntent = 'login' | 'signup' | 'link';
 
 interface OAuthButtonsProps {
@@ -49,25 +46,17 @@ export function GoogleIcon() {
   );
 }
 
-export function AppleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-4" fill="currentColor" aria-hidden="true">
-      <path d="M16.36 1.43c0 1.14-.42 2.2-1.24 3.05-.95 1-2.1 1.6-3.35 1.5-.14-1.1.42-2.26 1.22-3.06.9-.9 2.15-1.5 3.37-1.49ZM20.3 17.5c-.55 1.27-.82 1.84-1.53 2.96-1 1.55-2.4 3.48-4.15 3.5-1.55.02-1.95-1-4.05-1s-2.55.98-4.05 1c-1.75.02-3.08-1.75-4.08-3.3C.3 17.6-.63 14.16.9 11.15c1.06-2.05 2.94-3.35 4.99-3.37 1.6-.03 3.1 1.08 4.05 1.08.95 0 2.78-1.33 4.68-1.13.8.03 3.03.32 4.47 2.44-.12.07-2.67 1.56-2.64 4.65.03 3.7 3.24 4.93 3.28 4.95-.03.08-.5 1.75-.65 2.73Z" />
-    </svg>
-  );
-}
-
 export function OAuthButtons({ intent, showDivider = true }: OAuthButtonsProps) {
   const { toast } = useToast();
-  const [pendingProvider, setPendingProvider] = useState<OAuthProvider | null>(null);
+  const [isPending, setIsPending] = useState(false);
 
-  const handleClick = async (provider: OAuthProvider) => {
-    setPendingProvider(provider);
+  const handleClick = async () => {
+    setIsPending(true);
     try {
-      const url = await getOAuthStartUrl(provider, intent);
+      const url = await getOAuthStartUrl('google', intent);
       window.location.href = url;
     } catch {
-      setPendingProvider(null);
+      setIsPending(false);
       toast({
         title: REDIRECT_ERROR_TITLE,
         description: REDIRECT_ERROR_DESCRIPTION,
@@ -81,22 +70,12 @@ export function OAuthButtons({ intent, showDivider = true }: OAuthButtonsProps) 
       <Button
         type="button"
         variant="outline"
-        disabled={pendingProvider !== null}
+        disabled={isPending}
         className={googleButtonStyles}
-        onClick={() => handleClick('google')}
+        onClick={handleClick}
       >
         <GoogleIcon />
         {GOOGLE_LABEL}
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        disabled={pendingProvider !== null}
-        className={appleButtonStyles}
-        onClick={() => handleClick('apple')}
-      >
-        <AppleIcon />
-        {APPLE_LABEL}
       </Button>
 
       {showDivider && (

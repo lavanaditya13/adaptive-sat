@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ClipboardList, TrendingUp, Flame, LogOut } from 'lucide-react';
+import { CheckCircle2, ClipboardList, TrendingUp, Flame, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import { Button } from '@workspace/ui/components/button';
 import { Skeleton } from '@workspace/ui/components/skeleton';
 import { StatCard } from '@/components/dashboard/StatCard/StatCard';
@@ -24,6 +24,7 @@ import {
   GREETING_PREFIX,
   GREETING_EXCLAMATION,
   LOGOUT_LABEL,
+  SETTINGS_LABEL,
   SECTIONS_TITLE,
   QUESTIONS_CORRECT_LABEL,
   QUESTIONS_CORRECT_SUBTEXT_PREFIX,
@@ -40,7 +41,9 @@ import {
 import {
   CONTAINER_STYLES,
   HEADER_ROW_STYLES,
+  HEADER_ACTIONS_STYLES,
   LOGOUT_BUTTON_STYLES,
+  SETTINGS_BUTTON_STYLES,
   GREETING_EYEBROW_STYLES,
   GREETING_STYLES,
   STATS_GRID_STYLES,
@@ -145,16 +148,28 @@ export function DashboardPage() {
           </h1>
         </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className={LOGOUT_BUTTON_STYLES}
-          aria-label={LOGOUT_LABEL}
-          title={LOGOUT_LABEL}
-          onClick={handleLogout}
-        >
-          <LogOut className="size-4" />
-        </Button>
+        <div className={HEADER_ACTIONS_STYLES}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={SETTINGS_BUTTON_STYLES}
+            aria-label={SETTINGS_LABEL}
+            title={SETTINGS_LABEL}
+            onClick={() => navigate(ROUTES.SETTINGS)}
+          >
+            <SettingsIcon className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={LOGOUT_BUTTON_STYLES}
+            aria-label={LOGOUT_LABEL}
+            title={LOGOUT_LABEL}
+            onClick={handleLogout}
+          >
+            <LogOut className="size-4" />
+          </Button>
+        </div>
       </div>
 
       <div className={STATS_GRID_STYLES}>

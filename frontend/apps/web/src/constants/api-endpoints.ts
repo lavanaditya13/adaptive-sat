@@ -5,7 +5,6 @@ export const API = {
     ME: '/api/v1/auth/me',
     LOGOUT: '/api/v1/auth/logout',
     GOOGLE_START: '/api/v1/auth/google',
-    APPLE_START: '/api/v1/auth/apple',
     VERIFY_EMAIL: '/api/v1/auth/verify-email',
     RESEND_VERIFICATION: '/api/v1/auth/resend-verification',
   },
@@ -19,9 +18,9 @@ export const API = {
   },
   SETTINGS: {
     CONNECTED_PROVIDERS: '/api/v1/settings/connected-providers',
-    LINK_PROVIDER: (provider: 'google' | 'apple') =>
+    LINK_PROVIDER: (provider: 'google') =>
       `/api/v1/settings/connected-providers/${provider}/start`,
-    UNLINK_PROVIDER: (provider: 'google' | 'apple') =>
+    UNLINK_PROVIDER: (provider: 'google') =>
       `/api/v1/settings/connected-providers/${provider}`,
   },
 } as const;
