@@ -3,6 +3,19 @@ interface User {
   email: string;
   full_name: string;
   role: 'student' | 'parent' | 'tutor';
+  email_verified: boolean;
+  oauth_provider: 'google' | 'apple' | null;
+}
+
+interface ConnectedProvider {
+  provider: 'google' | 'apple';
+  linked_at: string;
+  email: string | null;
+}
+
+interface ConnectedProvidersResponse {
+  providers: ConnectedProvider[];
+  has_password: boolean;
 }
 
 interface EstimatedScore {
@@ -127,6 +140,8 @@ interface ApiErrorResponse {
 
 export type {
   User,
+  ConnectedProvider,
+  ConnectedProvidersResponse,
   EstimatedScore,
   DashboardResponse,
   PracticeOption,

@@ -179,3 +179,42 @@ async def test_resend_verification_sends_for_unverified_user(monkeypatch, unveri
 
     assert result is True
     assert called["user"] == unverified_user
+
+
+@pytest.mark.asyncio
+async def test_issue_signup_verification_email_skips_missing_resend_key_in_dev(
+    monkeypatch,
+    unverified_user,
+):
+    monkeypatch.setattr(auth_service.settings, "ENVIRONMENT", "development")
+
+    async def fail_missing_key(user):
+        raise HTTPException(
+            status_code=502,
+            detail="RESEND_API_KEY is not configured. Set it before sending email.",
+        )
+
+    monkeypatch.setattr(auth_service, "send_verification_email", fail_missing_key)
+
+    await auth_service.issue_signup_verification_email(unverified_user)
+
+
+@pytest.mark.asyncio
+async def test_issue_signup_verification_email_raises_missing_resend_key_in_production(
+    monkeypatch,
+    unverified_user,
+):
+    monkeypatch.setattr(auth_service.settings, "ENVIRONMENT", "production")
+
+    async def fail_missing_key(user):
+        raise HTTPException(
+            status_code=502,
+            detail="RESEND_API_KEY is not configured. Set it before sending email.",
+        )
+
+    monkeypatch.setattr(auth_service, "send_verification_email", fail_missing_key)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await auth_service.issue_signup_verification_email(unverified_user)
+
+    assert exc_info.value.status_code == 502

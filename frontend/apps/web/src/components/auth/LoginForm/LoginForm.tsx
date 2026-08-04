@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { ROUTES } from '@/constants/routes';
 import { getApiErrorDetail } from '@/utils/api-errors';
 import { useToast } from '@/components/toast/toast-provider';
+import { OAuthButtons } from '@/components/auth/OAuthButtons/OAuthButtons';
 import {
   CARD_STYLES,
   TITLE_STYLES,
@@ -63,6 +64,10 @@ export function LoginForm() {
     <div className={CARD_STYLES}>
       <h1 className={TITLE_STYLES}>{TITLE}</h1>
       <p className={SUBTITLE_STYLES}>{SUBTITLE}</p>
+
+      <div className="mt-6">
+        <OAuthButtons intent="login" />
+      </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className={formStyles}>
         <div className="space-y-2">

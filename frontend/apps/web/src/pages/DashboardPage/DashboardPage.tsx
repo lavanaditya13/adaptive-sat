@@ -9,6 +9,7 @@ import { WeakTopicsList } from '@/components/dashboard/WeakTopicsList/WeakTopics
 import { SectionCard } from '@/components/dashboard/SectionCard/SectionCard';
 import { EstimatedScoreCard } from '@/components/dashboard/EstimatedScoreCard/EstimatedScoreCard';
 import { PracticeModal } from '@/components/dashboard/PracticeModal/PracticeModal';
+import { EmailVerificationBanner } from '@/components/dashboard/EmailVerificationBanner/EmailVerificationBanner';
 import { getDashboard } from '@/services/dashboard-service';
 import { logout } from '@/services/auth-service';
 import { useAuthStore } from '@/store/auth-store';
@@ -60,6 +61,7 @@ type DashboardSection = DashboardResponse['sections'][number];
 export function DashboardPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
   const clearUser = useAuthStore((state) => state.clearUser);
   const resetPracticeSession = usePracticeSessionStore((state) => state.resetSession);
   const clearResults = useResultsStore((state) => state.clearResults);
@@ -131,6 +133,8 @@ export function DashboardPage() {
 
   return (
     <div className={CONTAINER_STYLES}>
+      {user?.email_verified === false && <EmailVerificationBanner />}
+
       <div className={HEADER_ROW_STYLES}>
         <div>
           <p className={GREETING_EYEBROW_STYLES}>{GREETING_EYEBROW}</p>

@@ -7,7 +7,7 @@ from urllib.parse import (
     urlunsplit,
 )
 
-from pydantic import ValidationInfo, field_validator
+from pydantic import AliasChoices, Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -40,7 +40,21 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-this-secret-key"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     RESEND_API_KEY: str = ""
-    FRONTEND_URL: str = "http://localhost:5173"
+    # Stable production domain — used whenever an environment doesn't set
+    # these explicitly (e.g. Production itself, so it doesn't need its own
+    # copies of vars that never change). Preview environments and local dev
+    # still need their own values (a Preview redirect_uri pointing at prod
+    # would land the browser/cookie on the wrong domain), set explicitly in
+    # Vercel/`.env` respectively.
+    FRONTEND_URL: str = "https://adaptive-sat.vercel.app"
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "https://adaptive-sat.vercel.app/api/v1/auth/google/callback"
+    APPLE_CLIENT_ID: str = ""
+    APPLE_TEAM_ID: str = ""
+    APPLE_KEY_ID: str = ""
+    APPLE_PRIVATE_KEY: str = ""
+    APPLE_REDIRECT_URI: str = "https://adaptive-sat.vercel.app/api/v1/auth/apple/callback"
 
     # PostgreSQL credentials used when DATABASE_URL is not provided
     POSTGRES_SERVER: str = "localhost"
@@ -49,11 +63,26 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "adaptive_sat"
     POSTGRES_PORT: int = 5432
 
-    # Pooled async connection used by FastAPI
-    DATABASE_URL: str = ""
+    # Pooled async connection used by FastAPI.
+    # Vercel's Neon integration prefixes injected vars (e.g. "added_DATABASE_URL")
+    # when the plain name is already taken by another connected resource —
+    # accept either so the dashboard doesn't need to be renamed by hand.
+    DATABASE_URL: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "DATABASE_URL", "added_DATABASE_URL", "ADDED_DATABASE_URL"
+        ),
+    )
 
     # Direct connection supplied by Neon
-    DATABASE_URL_UNPOOLED: str = ""
+    DATABASE_URL_UNPOOLED: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "DATABASE_URL_UNPOOLED",
+            "added_DATABASE_URL_UNPOOLED",
+            "ADDED_DATABASE_URL_UNPOOLED",
+        ),
+    )
 
     # Synchronous connection used by Alembic
     SYNC_DATABASE_URL: str = ""

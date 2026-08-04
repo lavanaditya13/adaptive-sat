@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -13,6 +14,16 @@ from app.services.auth_service import (
     VerificationTokenExpiredError,
     VerificationTokenInvalidError,
 )
+from app.services.oauth_service import (
+    OAuthConfigurationError,
+    OAuthProviderConflictError,
+    OAuthProviderError,
+    OAuthStateExpiredError,
+    OAuthStateInvalidError,
+    build_google_authorization_url,
+    complete_google_oauth,
+    get_oauth_intent,
+)
 from app.schemas.auth import (
     AuthUserResponse,
     AuthResponse,
@@ -25,6 +36,13 @@ from app.schemas.auth import (
 )
 
 router = APIRouter()
+
+
+def _frontend_oauth_callback_url(status_value: str | None = None, reason: str | None = None) -> str:
+    base_url = settings.FRONTEND_URL.rstrip("/")
+    if status_value == "error":
+        return f"{base_url}/oauth/callback?status=error&reason={reason or 'provider_error'}"
+    return f"{base_url}/oauth/callback"
 
 
 def _issue_session(response: Response, user: User) -> LoginResponse:
@@ -93,6 +111,21 @@ async def signup(
     await issue_signup_verification_email(new_user)
 
     return _issue_session(response, new_user)
+
+
+@router.get("/google")
+async def google_start(
+    intent: str = Query(default="login", pattern="^(login|signup|link)$"),
+):
+    try:
+        google_url = build_google_authorization_url(intent=intent)
+    except OAuthConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+
+    return RedirectResponse(url=google_url, status_code=status.HTTP_302_FOUND)
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -166,6 +199,68 @@ async def verify_email_endpoint(
             oauth_provider=user.oauth_provider,
         )
     )
+
+
+@router.get("/google/callback")
+async def google_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    if error:
+        reason = "access_denied" if error == "access_denied" else "provider_error"
+        return RedirectResponse(
+            url=_frontend_oauth_callback_url(status_value="error", reason=reason),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    if not code or not state:
+        return RedirectResponse(
+            url=_frontend_oauth_callback_url(status_value="error", reason="provider_error"),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    try:
+        intent = get_oauth_intent(state, provider="google")
+        linking_user: User | None = None
+
+        if intent == "link":
+            try:
+                linking_user = await get_current_user(
+                    access_token=request.cookies.get("access_token"),
+                    db=db,
+                )
+            except HTTPException:
+                return RedirectResponse(
+                    url=_frontend_oauth_callback_url(status_value="error", reason="provider_error"),
+                    status_code=status.HTTP_302_FOUND,
+                )
+
+        user = await complete_google_oauth(
+            db,
+            code=code,
+            state=state,
+            current_user=linking_user,
+        )
+    except OAuthProviderConflictError:
+        return RedirectResponse(
+            url=_frontend_oauth_callback_url(status_value="error", reason="email_conflict"),
+            status_code=status.HTTP_302_FOUND,
+        )
+    except (OAuthStateExpiredError, OAuthStateInvalidError, OAuthProviderError):
+        return RedirectResponse(
+            url=_frontend_oauth_callback_url(status_value="error", reason="provider_error"),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    redirect_response = RedirectResponse(
+        url=_frontend_oauth_callback_url(),
+        status_code=status.HTTP_302_FOUND,
+    )
+    _issue_session(redirect_response, user)
+    return redirect_response
 
 
 @router.post("/resend-verification", status_code=status.HTTP_204_NO_CONTENT)

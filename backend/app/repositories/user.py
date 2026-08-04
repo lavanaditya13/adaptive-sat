@@ -20,6 +20,23 @@ class UserRepository(BaseRepository[User]):
         result = await db.execute(query)
         return result.scalar_one_or_none()
 
+    async def get_by_oauth_identity(
+        self,
+        db: AsyncSession,
+        *,
+        provider: str,
+        oauth_id: str,
+    ) -> Optional[User]:
+        """
+        Fetch a user by OAuth provider and provider-specific subject ID.
+        """
+        query = select(User).where(
+            User.oauth_provider == provider,
+            User.oauth_id == oauth_id,
+        )
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
+
     async def create_user(self, db: AsyncSession, *, obj_in) -> User:
         """
         Create a user with either password credentials or OAuth identity.

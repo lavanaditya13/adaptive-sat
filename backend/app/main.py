@@ -1,12 +1,26 @@
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.v1.router import api_router
+from app.core.migrations import run_pending_migrations
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Alembic's env.py calls asyncio.run() internally, which can't run
+    # inside this already-running event loop — offload to a thread.
+    await asyncio.to_thread(run_pending_migrations)
+    yield
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    description="Backend API for Adaptive SAT Learning Platform"
+    description="Backend API for Adaptive SAT Learning Platform",
+    lifespan=lifespan,
 )
 
 # CORS middleware configuration
