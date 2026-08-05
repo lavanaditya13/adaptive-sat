@@ -8,6 +8,8 @@ from app.schemas.auth import (
     LoginRequest,
     AuthResponse,
     ResendVerificationByEmailRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
     RefreshRequest,
     RefreshResponse,
 )
@@ -60,6 +62,8 @@ __all__ = [
     "LoginRequest",
     "AuthResponse",
     "ResendVerificationByEmailRequest",
+    "ForgotPasswordRequest",
+    "ResetPasswordRequest",
     "RefreshRequest",
     "RefreshResponse",
     "ConnectedProviderItem",

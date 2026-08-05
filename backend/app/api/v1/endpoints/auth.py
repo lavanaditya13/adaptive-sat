@@ -11,11 +11,15 @@ from app.models.user import User
 from app.repositories.user import user_repository
 from app.services.auth_service import (
     issue_signup_verification_email,
+    request_password_reset_email_by_address,
     resend_verification_email_by_address,
     resend_verification_email,
+    reset_password,
     verify_email,
     VerificationTokenExpiredError,
     VerificationTokenInvalidError,
+    PasswordResetTokenExpiredError,
+    PasswordResetTokenInvalidError,
 )
 from app.services.oauth_service import (
     OAuthConfigurationError,
@@ -30,11 +34,13 @@ from app.services.oauth_service import (
 from app.schemas.auth import (
     AuthUserResponse,
     AuthResponse,
+    ForgotPasswordRequest,
     LoginRequest,
     LoginResponse,
     ResendVerificationByEmailRequest,
     RefreshRequest,
     RefreshResponse,
+    ResetPasswordRequest,
     SignupRequest,
     VerifyEmailRequest,
 )
@@ -335,6 +341,31 @@ async def resend_verification_by_email(
     Always returns 204 to avoid account enumeration.
     """
     await resend_verification_email_by_address(db, payload.email)
+
+
+@router.post("/forgot-password", status_code=status.HTTP_204_NO_CONTENT)
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Unauthenticated password-reset request endpoint.
+
+    Always returns 204 to avoid account enumeration.
+    """
+    await request_password_reset_email_by_address(db, payload.email)
+
+
+@router.post("/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+async def reset_password_endpoint(
+    payload: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        await reset_password(db, payload.token, payload.password)
+    except PasswordResetTokenExpiredError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except PasswordResetTokenInvalidError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

@@ -6,6 +6,7 @@ from fastapi import HTTPException, Response
 
 from app.api.v1.endpoints import auth as auth_module
 from app.models.user import User
+from app.services import auth_service as auth_service_module
 
 
 def _make_user(*, password: str | None = "hashed", role: str = "student") -> User:
@@ -212,6 +213,54 @@ async def test_resend_verification_by_email_propagates_send_failure(monkeypatch)
         )
 
     assert exc_info.value.status_code == 502
+
+
+@pytest.mark.asyncio
+async def test_forgot_password_requests_reset_email_for_verified_password_user(monkeypatch):
+    user = _make_user(password="hashed")
+    user.email_verified = True
+    send_mock = AsyncMock(return_value=None)
+    db = SimpleNamespace()
+
+    monkeypatch.setattr(
+        auth_module.user_repository,
+        "get_by_email",
+        AsyncMock(return_value=user),
+    )
+    monkeypatch.setattr(auth_module, "request_password_reset_email_by_address", send_mock)
+
+    result = await auth_module.forgot_password(
+        SimpleNamespace(email="student@example.com"),
+        db=db,
+    )
+
+    assert result is None
+    send_mock.assert_awaited_once_with(db, "student@example.com")
+
+
+@pytest.mark.asyncio
+async def test_reset_password_updates_password_hash(monkeypatch):
+    user = _make_user(password="hashed")
+    updated_user = _make_user(password="new-hashed")
+
+    monkeypatch.setattr(auth_service_module, "decode_password_reset_token", lambda token: 1)
+    monkeypatch.setattr(
+        auth_service_module.user_repository,
+        "get",
+        AsyncMock(return_value=user),
+    )
+    update_mock = AsyncMock(return_value=updated_user)
+    monkeypatch.setattr(auth_service_module.user_repository, "update", update_mock)
+    monkeypatch.setattr(auth_service_module, "get_password_hash", lambda password: "new-hashed")
+
+    result = await auth_service_module.reset_password(
+        db=SimpleNamespace(),
+        token="reset-token",
+        new_password="new-secret",
+    )
+
+    assert result.hashed_password == "new-hashed"
+    update_mock.assert_awaited_once()
 
 
 @pytest.mark.asyncio
