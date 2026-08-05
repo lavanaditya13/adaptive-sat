@@ -82,7 +82,7 @@ def _issue_session(response: Response, user: User) -> LoginResponse:
 
 @router.post(
     "/signup",
-    response_model=LoginResponse,
+    response_model=AuthResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def signup(
@@ -146,7 +146,16 @@ async def signup(
             extra={"email": new_user.email, "user_id": new_user.id},
         )
 
-    return _issue_session(response, new_user)
+    return AuthResponse(
+        user=AuthUserResponse(
+            user_id=new_user.id,
+            email=new_user.email,
+            full_name=new_user.full_name,
+            role=new_user.role,
+            email_verified=new_user.email_verified,
+            oauth_provider=new_user.oauth_provider,
+        )
+    )
 
 
 @router.get("/google")
@@ -189,6 +198,15 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
+        )
+
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "account_unverified",
+                "message": "Account exists but is not verified. Check your email.",
+            },
         )
 
     return _issue_session(response, user)
@@ -316,13 +334,7 @@ async def resend_verification_by_email(
 
     Always returns 204 to avoid account enumeration.
     """
-    try:
-        await resend_verification_email_by_address(db, payload.email)
-    except Exception:
-        logger.exception(
-            "Resend verification by email failed",
-            extra={"email": payload.email},
-        )
+    await resend_verification_email_by_address(db, payload.email)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
