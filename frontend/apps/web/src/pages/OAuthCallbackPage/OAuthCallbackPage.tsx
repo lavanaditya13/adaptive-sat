@@ -29,6 +29,28 @@ const REASON_MESSAGES: Record<string, string> = {
   provider_error: ERROR_REASON_PROVIDER_ERROR,
 };
 
+const CONFIRM_SESSION_RETRY_COUNT = 5;
+const CONFIRM_SESSION_RETRY_DELAY_MS = 200;
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function confirmOAuthSession() {
+  for (let attempt = 0; attempt < CONFIRM_SESSION_RETRY_COUNT; attempt += 1) {
+    try {
+      const user = await getCurrentUser();
+      return user;
+    } catch (error) {
+      if (attempt === CONFIRM_SESSION_RETRY_COUNT - 1) {
+        throw error;
+      }
+
+      await wait(CONFIRM_SESSION_RETRY_DELAY_MS);
+    }
+  }
+}
+
 export function OAuthCallbackPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -54,7 +76,7 @@ export function OAuthCallbackPage() {
       return;
     }
 
-    getCurrentUser()
+    confirmOAuthSession()
       .then((user) => {
         setUser(user);
         navigate(ROUTES.DASHBOARD, { replace: true });

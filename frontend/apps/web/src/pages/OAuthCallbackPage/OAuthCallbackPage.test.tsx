@@ -81,4 +81,27 @@ describe('OAuthCallbackPage', () => {
       expect(screen.getByText('Login')).toBeInTheDocument();
     });
   });
+
+  it('retries session confirmation before failing the OAuth callback', async () => {
+    vi.mocked(getCurrentUser)
+      .mockRejectedValueOnce(new Error('not ready yet'))
+      .mockResolvedValueOnce({
+        user_id: 1,
+        email: 'a@example.com',
+        full_name: 'A',
+        role: 'student',
+        email_verified: true,
+        oauth_provider: 'google',
+      });
+
+    renderAt('/oauth/callback');
+
+    await waitFor(() => {
+      expect(setUserMock).toHaveBeenCalled();
+      expect(screen.getByText('Dashboard')).toBeInTheDocument();
+    });
+
+    expect(toastMock).not.toHaveBeenCalled();
+    expect(getCurrentUser).toHaveBeenCalledTimes(2);
+  });
 });
