@@ -127,15 +127,19 @@ async def resend_verification_email(db: AsyncSession, user: User) -> bool:
     return True
 
 
+async def resend_verification_email_by_address(db: AsyncSession, email: str) -> bool:
+    """Best-effort resend by email for unauthenticated flows.
+
+    Returns True only when an unverified user exists and send was attempted.
+    Returns False for missing/verified users to avoid account enumeration.
+    """
+    user = await user_repository.get_by_email(db, email=email)
+    if user is None or user.email_verified:
+        return False
+
+    await send_verification_email(user)
+    return True
+
+
 async def issue_signup_verification_email(user: User) -> None:
-    try:
-        await send_verification_email(user)
-    except HTTPException as exc:
-        # In local/dev/test environments we do not block signup if only the
-        # transactional email provider is not configured.
-        if (
-            settings.ENVIRONMENT != "production"
-            and "RESEND_API_KEY is not configured" in str(exc.detail)
-        ):
-            return
-        raise
+    await send_verification_email(user)
