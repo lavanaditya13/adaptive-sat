@@ -7,6 +7,7 @@ export const API = {
     GOOGLE_START: '/api/v1/auth/google',
     VERIFY_EMAIL: '/api/v1/auth/verify-email',
     RESEND_VERIFICATION: '/api/v1/auth/resend-verification',
+    RESEND_VERIFICATION_BY_EMAIL: '/api/v1/auth/resend-verification-by-email',
   },
   DASHBOARD: '/api/v1/dashboard',
   PRACTICE: {
