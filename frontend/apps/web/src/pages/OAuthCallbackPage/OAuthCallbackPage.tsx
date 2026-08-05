@@ -5,6 +5,7 @@ import { getCurrentUser } from '@/services/auth-service';
 import { useAuthStore } from '@/store/auth-store';
 import { useToast } from '@/components/toast/toast-provider';
 import { ROUTES } from '@/constants/routes';
+import type { User } from '@/types/api';
 import {
   CONTAINER_STYLES,
   CARD_STYLES,
@@ -36,7 +37,7 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-async function confirmOAuthSession() {
+async function confirmOAuthSession(): Promise<User> {
   for (let attempt = 0; attempt < CONFIRM_SESSION_RETRY_COUNT; attempt += 1) {
     try {
       const user = await getCurrentUser();
@@ -49,6 +50,8 @@ async function confirmOAuthSession() {
       await wait(CONFIRM_SESSION_RETRY_DELAY_MS);
     }
   }
+
+  throw new Error('OAuth session confirmation failed.');
 }
 
 export function OAuthCallbackPage() {
