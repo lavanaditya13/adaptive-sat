@@ -70,3 +70,11 @@ export async function resendVerificationEmail(): Promise<void> {
 export async function resendVerificationEmailByEmail(email: string): Promise<void> {
   await apiClient.post(API.AUTH.RESEND_VERIFICATION_BY_EMAIL, { email });
 }
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  await apiClient.post(API.AUTH.FORGOT_PASSWORD, { email });
+}
+
+export async function resetPassword(token: string, password: string): Promise<void> {
+  await apiClient.post(API.AUTH.RESET_PASSWORD, { token, password });
+}

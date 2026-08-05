@@ -38,6 +38,15 @@ class VerifyEmailRequest(BaseModel):
 class ResendVerificationByEmailRequest(BaseModel):
     email: EmailStr
 
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
