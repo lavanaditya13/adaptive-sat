@@ -1,6 +1,4 @@
 const LOCAL_API_BASE_URL = 'http://localhost:8000';
-const LOCAL_HEALTH_CHECK_PATH = '/api/v1/health';
-const LOCAL_HEALTH_CHECK_TIMEOUT_MS = 1000;
 
 function normalize(url: string): string {
   return url.replace(/\/+$/, '');
