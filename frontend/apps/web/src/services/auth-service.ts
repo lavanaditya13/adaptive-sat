@@ -66,3 +66,7 @@ export async function resendVerificationEmail(): Promise<void> {
     await mockHandlers.resendVerificationEmail();
   }
 }
+
+export async function resendVerificationEmailByEmail(email: string): Promise<void> {
+  await apiClient.post(API.AUTH.RESEND_VERIFICATION_BY_EMAIL, { email });
+}
