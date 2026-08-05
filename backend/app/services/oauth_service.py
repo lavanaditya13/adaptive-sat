@@ -184,18 +184,8 @@ async def _upsert_oauth_user(
     if email:
         existing_email_user = await user_repository.get_by_email(db, email=email)
         if existing_email_user:
-            updates = {
-                "oauth_provider": provider,
-                "oauth_id": provider_id,
-                "email_verified": email_verified,
-            }
-            if full_name and not existing_email_user.full_name:
-                updates["full_name"] = full_name
-
-            return await user_repository.update(
-                db,
-                db_obj=existing_email_user,
-                obj_in=updates,
+            raise OAuthProviderConflictError(
+                "An account with this email already exists. Sign in and link Google from settings."
             )
 
     if not email:

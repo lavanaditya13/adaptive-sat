@@ -34,6 +34,10 @@ class AuthResponse(BaseModel):
 class VerifyEmailRequest(BaseModel):
     token: str
 
+
+class ResendVerificationByEmailRequest(BaseModel):
+    email: EmailStr
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
