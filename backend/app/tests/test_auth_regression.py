@@ -54,9 +54,9 @@ async def test_signup_returns_session_and_user(monkeypatch):
         db=SimpleNamespace(),
     )
 
-    assert result.access_token == "token-123"
+    assert result.user.user_id == 1
     assert result.user.email == "student@example.com"
-    assert response.headers["set-cookie"].startswith("access_token=token-123")
+    assert "set-cookie" not in response.headers
 
 
 @pytest.mark.asyncio
@@ -74,7 +74,6 @@ async def test_signup_continues_when_verification_email_fails(monkeypatch):
         "create_user",
         AsyncMock(return_value=created_user),
     )
-    monkeypatch.setattr(auth_module, "create_access_token", lambda user_id: "token-123")
     monkeypatch.setattr(
         auth_module,
         "issue_signup_verification_email",
@@ -92,8 +91,32 @@ async def test_signup_continues_when_verification_email_fails(monkeypatch):
         db=SimpleNamespace(),
     )
 
-    assert result.access_token == "token-123"
+    assert result.user.user_id == 1
     assert result.user.email == "student@example.com"
+
+
+@pytest.mark.asyncio
+async def test_login_rejects_unverified_password_user(monkeypatch):
+    user = _make_user(password="hashed")
+    user.email_verified = False
+    response = Response()
+
+    monkeypatch.setattr(
+        auth_module.user_repository,
+        "get_by_email",
+        AsyncMock(return_value=user),
+    )
+    monkeypatch.setattr(auth_module, "verify_password", lambda plain, hashed: True)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await auth_module.login(
+            SimpleNamespace(email="student@example.com", role="student", password="secret"),
+            response,
+            db=SimpleNamespace(),
+        )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["code"] == "account_unverified"
 
 
 @pytest.mark.asyncio
@@ -156,8 +179,45 @@ async def test_signup_existing_oauth_only_user_returns_google_message(monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_resend_verification_by_email_returns_no_content(monkeypatch):
+    resend_mock = AsyncMock(return_value=True)
+    monkeypatch.setattr(auth_module, "resend_verification_email_by_address", resend_mock)
+
+    result = await auth_module.resend_verification_by_email(
+        SimpleNamespace(email="student@example.com"),
+        db=SimpleNamespace(),
+    )
+
+    assert result is None
+    resend_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_resend_verification_by_email_propagates_send_failure(monkeypatch):
+    monkeypatch.setattr(
+        auth_module,
+        "resend_verification_email_by_address",
+        AsyncMock(
+            side_effect=HTTPException(
+                status_code=502,
+                detail="Failed to send email via Resend",
+            )
+        ),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await auth_module.resend_verification_by_email(
+            SimpleNamespace(email="student@example.com"),
+            db=SimpleNamespace(),
+        )
+
+    assert exc_info.value.status_code == 502
+
+
+@pytest.mark.asyncio
 async def test_login_succeeds_for_password_users(monkeypatch):
     user = _make_user(password="hashed")
+    user.email_verified = True
     response = Response()
 
     monkeypatch.setattr(
