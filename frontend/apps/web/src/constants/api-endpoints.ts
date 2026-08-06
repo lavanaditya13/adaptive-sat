@@ -15,6 +15,7 @@ export const API = {
   PRACTICE: {
     SELECT_SECTION: '/api/v1/practice/context/section',
     START: '/api/v1/practice/start',
+    ABANDON: '/api/v1/practice/abandon',
     ANSWER: '/api/v1/practice/answer',
     QUESTION: '/api/v1/practice/question',
     COMPLETE: '/api/v1/practice/complete',
