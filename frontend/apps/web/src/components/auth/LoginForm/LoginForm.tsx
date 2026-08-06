@@ -28,7 +28,6 @@ import {
   EMAIL_LABEL,
   PASSWORD_LABEL,
   FORGOT_PASSWORD_LABEL,
-  FORGOT_PASSWORD_BUTTON_ARIA_LABEL,
   SUBMIT_LABEL,
   SUBMITTING_LABEL,
   NO_ACCOUNT,
@@ -80,14 +79,9 @@ export function LoginForm() {
         <div className="space-y-2">
           <div className={LABEL_ROW_STYLES}>
             <Label htmlFor="password">{PASSWORD_LABEL}</Label>
-            <button
-              type="button"
-              onClick={() => navigate(ROUTES.FORGOT_PASSWORD)}
-              className={forgotPasswordStyles}
-              aria-label={FORGOT_PASSWORD_BUTTON_ARIA_LABEL}
-            >
+            <span className={forgotPasswordStyles} aria-disabled="true">
               {FORGOT_PASSWORD_LABEL}
-            </button>
+            </span>
           </div>
           <Input id="password" type="password" {...register('password')} className={inputStyles} />
           {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}

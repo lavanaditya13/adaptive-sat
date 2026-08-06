@@ -182,10 +182,29 @@ async def test_resend_verification_sends_for_unverified_user(monkeypatch, unveri
 
 
 @pytest.mark.asyncio
-async def test_issue_signup_verification_email_propagates_failure(
+async def test_issue_signup_verification_email_skips_missing_resend_key_in_dev(
     monkeypatch,
     unverified_user,
 ):
+    monkeypatch.setattr(auth_service.settings, "ENVIRONMENT", "development")
+
+    async def fail_missing_key(user):
+        raise HTTPException(
+            status_code=502,
+            detail="RESEND_API_KEY is not configured. Set it before sending email.",
+        )
+
+    monkeypatch.setattr(auth_service, "send_verification_email", fail_missing_key)
+
+    await auth_service.issue_signup_verification_email(unverified_user)
+
+
+@pytest.mark.asyncio
+async def test_issue_signup_verification_email_raises_missing_resend_key_in_production(
+    monkeypatch,
+    unverified_user,
+):
+    monkeypatch.setattr(auth_service.settings, "ENVIRONMENT", "production")
 
     async def fail_missing_key(user):
         raise HTTPException(
@@ -199,38 +218,3 @@ async def test_issue_signup_verification_email_propagates_failure(
         await auth_service.issue_signup_verification_email(unverified_user)
 
     assert exc_info.value.status_code == 502
-
-
-@pytest.mark.asyncio
-async def test_resend_verification_email_by_address_noop_for_missing_email(monkeypatch):
-    monkeypatch.setattr(
-        auth_service.user_repository,
-        "get_by_email",
-        AsyncMock(return_value=None),
-    )
-
-    result = await auth_service.resend_verification_email_by_address(
-        SimpleNamespace(),
-        "missing@example.com",
-    )
-
-    assert result is False
-
-
-@pytest.mark.asyncio
-async def test_resend_verification_email_by_address_sends_for_unverified(monkeypatch, unverified_user):
-    monkeypatch.setattr(
-        auth_service.user_repository,
-        "get_by_email",
-        AsyncMock(return_value=unverified_user),
-    )
-    send_mock = AsyncMock(return_value=None)
-    monkeypatch.setattr(auth_service, "send_verification_email", send_mock)
-
-    result = await auth_service.resend_verification_email_by_address(
-        SimpleNamespace(),
-        unverified_user.email,
-    )
-
-    assert result is True
-    send_mock.assert_awaited_once_with(unverified_user)

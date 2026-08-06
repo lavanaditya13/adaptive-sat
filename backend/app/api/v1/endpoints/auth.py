@@ -1,5 +1,3 @@
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,15 +9,10 @@ from app.models.user import User
 from app.repositories.user import user_repository
 from app.services.auth_service import (
     issue_signup_verification_email,
-    request_password_reset_email_by_address,
-    resend_verification_email_by_address,
     resend_verification_email,
-    reset_password,
     verify_email,
     VerificationTokenExpiredError,
     VerificationTokenInvalidError,
-    PasswordResetTokenExpiredError,
-    PasswordResetTokenInvalidError,
 )
 from app.services.oauth_service import (
     OAuthConfigurationError,
@@ -34,19 +27,15 @@ from app.services.oauth_service import (
 from app.schemas.auth import (
     AuthUserResponse,
     AuthResponse,
-    ForgotPasswordRequest,
     LoginRequest,
     LoginResponse,
-    ResendVerificationByEmailRequest,
     RefreshRequest,
     RefreshResponse,
-    ResetPasswordRequest,
     SignupRequest,
     VerifyEmailRequest,
 )
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
 
 
 def _frontend_oauth_callback_url(status_value: str | None = None, reason: str | None = None) -> str:
@@ -88,7 +77,7 @@ def _issue_session(response: Response, user: User) -> LoginResponse:
 
 @router.post(
     "/signup",
-    response_model=AuthResponse,
+    response_model=LoginResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def signup(
@@ -103,30 +92,6 @@ async def signup(
     )
 
     if existing_user:
-        if existing_user.oauth_provider and not existing_user.hashed_password:
-            provider = existing_user.oauth_provider.capitalize()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"This email is registered via {provider} - sign in with {provider} instead.",
-            )
-
-        if not existing_user.email_verified and existing_user.hashed_password:
-            try:
-                await issue_signup_verification_email(existing_user)
-            except Exception:
-                logger.exception(
-                    "Resend verification on duplicate unverified signup failed",
-                    extra={"email": user_in.email},
-                )
-
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "code": "account_unverified",
-                    "message": "Account exists but is not verified. Check your email.",
-                },
-            )
-
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered",
@@ -143,25 +108,9 @@ async def signup(
             detail="Invalid password format",
         ) from exc
 
-    try:
-        await issue_signup_verification_email(new_user)
-    except Exception:
-        # Best-effort email on signup: never fail account creation/session issuance.
-        logger.exception(
-            "Signup verification email failed",
-            extra={"email": new_user.email, "user_id": new_user.id},
-        )
+    await issue_signup_verification_email(new_user)
 
-    return AuthResponse(
-        user=AuthUserResponse(
-            user_id=new_user.id,
-            email=new_user.email,
-            full_name=new_user.full_name,
-            role=new_user.role,
-            email_verified=new_user.email_verified,
-            oauth_provider=new_user.oauth_provider,
-        )
-    )
+    return _issue_session(response, new_user)
 
 
 @router.get("/google")
@@ -204,15 +153,6 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
-        )
-
-    if not user.email_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "account_unverified",
-                "message": "Account exists but is not verified. Check your email.",
-            },
         )
 
     return _issue_session(response, user)
@@ -329,43 +269,6 @@ async def resend_verification(
     db: AsyncSession = Depends(get_db),
 ):
     await resend_verification_email(db, current_user)
-
-
-@router.post("/resend-verification-by-email", status_code=status.HTTP_204_NO_CONTENT)
-async def resend_verification_by_email(
-    payload: ResendVerificationByEmailRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """Unauthenticated resend endpoint used by signup/login recovery UX.
-
-    Always returns 204 to avoid account enumeration.
-    """
-    await resend_verification_email_by_address(db, payload.email)
-
-
-@router.post("/forgot-password", status_code=status.HTTP_204_NO_CONTENT)
-async def forgot_password(
-    payload: ForgotPasswordRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """Unauthenticated password-reset request endpoint.
-
-    Always returns 204 to avoid account enumeration.
-    """
-    await request_password_reset_email_by_address(db, payload.email)
-
-
-@router.post("/reset-password", status_code=status.HTTP_204_NO_CONTENT)
-async def reset_password_endpoint(
-    payload: ResetPasswordRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    try:
-        await reset_password(db, payload.token, payload.password)
-    except PasswordResetTokenExpiredError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except PasswordResetTokenInvalidError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

@@ -3,10 +3,10 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { CheckEmailPage } from './CheckEmailPage';
-import { resendVerificationEmailByEmail } from '@/services/auth-service';
+import { resendVerificationEmail } from '@/services/auth-service';
 
 vi.mock('@/services/auth-service', () => ({
-  resendVerificationEmailByEmail: vi.fn(),
+  resendVerificationEmail: vi.fn(),
 }));
 
 const toastMock = vi.fn();
@@ -16,7 +16,7 @@ vi.mock('@/components/toast/toast-provider', () => ({
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={['/check-email?email=student@example.com']}>
+    <MemoryRouter>
       <CheckEmailPage />
     </MemoryRouter>
   );
@@ -24,7 +24,7 @@ function renderPage() {
 
 describe('CheckEmailPage', () => {
   beforeEach(() => {
-    vi.mocked(resendVerificationEmailByEmail).mockReset();
+    vi.mocked(resendVerificationEmail).mockReset();
     toastMock.mockReset();
   });
 
@@ -36,21 +36,21 @@ describe('CheckEmailPage', () => {
     expect(screen.getByRole('button', { name: /back to login/i })).toBeInTheDocument();
   });
 
-  it('calls resendVerificationEmailByEmail and shows a success toast on click', async () => {
-    vi.mocked(resendVerificationEmailByEmail).mockResolvedValue(undefined);
+  it('calls resendVerificationEmail and shows a success toast on click', async () => {
+    vi.mocked(resendVerificationEmail).mockResolvedValue(undefined);
     const user = userEvent.setup();
     renderPage();
 
     await user.click(screen.getByRole('button', { name: /resend email/i }));
 
     await waitFor(() => {
-      expect(resendVerificationEmailByEmail).toHaveBeenCalledWith('student@example.com');
+      expect(resendVerificationEmail).toHaveBeenCalled();
       expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ variant: 'success' }));
     });
   });
 
   it('shows an error toast if resend fails', async () => {
-    vi.mocked(resendVerificationEmailByEmail).mockRejectedValue(new Error('fail'));
+    vi.mocked(resendVerificationEmail).mockRejectedValue(new Error('fail'));
     const user = userEvent.setup();
     renderPage();
 
