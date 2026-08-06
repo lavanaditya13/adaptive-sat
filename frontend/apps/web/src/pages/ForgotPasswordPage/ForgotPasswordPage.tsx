@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@workspace/ui/components/button';
 import { Input } from '@workspace/ui/components/input';
@@ -7,77 +8,83 @@ import { requestPasswordReset } from '@/services/auth-service';
 import { useToast } from '@/components/toast/toast-provider';
 import { getApiErrorDetail } from '@/utils/api-errors';
 import { ROUTES } from '@/constants/routes';
+import { forgotPasswordSchema, type ForgotPasswordFormData } from '@/utils/validation-schemas';
+import {
+  CONTAINER_STYLES,
+  CARD_STYLES,
+  TITLE_STYLES,
+  SUBTITLE_STYLES,
+  FORM_STYLES,
+  FIELD_STYLES,
+  SUBMIT_BUTTON_STYLES,
+  LINK_STYLES,
+} from './ForgotPasswordPage.styles';
+import {
+  TITLE,
+  SUBTITLE,
+  EMAIL_LABEL,
+  SUBMIT_LABEL,
+  SUBMITTING_LABEL,
+  BACK_TO_LOGIN_LABEL,
+  RESET_LINK_SENT_TITLE,
+  RESET_LINK_SENT_DESCRIPTION,
+  RESET_LINK_ERROR_TITLE,
+} from './ForgotPasswordPage.constants';
 
 export function ForgotPasswordPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [email, setEmail] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<ForgotPasswordFormData>({
+    resolver: zodResolver(forgotPasswordSchema),
+  });
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      toast({
-        title: 'Email required',
-        description: 'Enter the email address for your account.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
+  const onSubmit = async (data: ForgotPasswordFormData) => {
     try {
-      await requestPasswordReset(trimmedEmail);
+      await requestPasswordReset(data.email);
       toast({
-        title: 'Reset link sent',
-        description: 'If an account exists, check your inbox for the reset link.',
+        title: RESET_LINK_SENT_TITLE,
+        description: RESET_LINK_SENT_DESCRIPTION,
         variant: 'success',
       });
       navigate(ROUTES.LOGIN);
     } catch (error) {
       toast({
-        title: 'Could not send reset link',
+        title: RESET_LINK_ERROR_TITLE,
         description: getApiErrorDetail(error),
         variant: 'destructive',
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="flex min-h-svh items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-2xl bg-card p-8 text-center ring-1 ring-foreground/10">
-        <h1 className="font-heading text-2xl font-semibold">Reset your password</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Enter your email address and we&apos;ll send a reset link if the account exists.
-        </p>
+    <div className={CONTAINER_STYLES}>
+      <div className={CARD_STYLES}>
+        <h1 className={TITLE_STYLES}>{TITLE}</h1>
+        <p className={SUBTITLE_STYLES}>{SUBTITLE}</p>
 
-        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4 text-left">
-          <div className="space-y-2">
-            <Label htmlFor="forgot-password-email">Email</Label>
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className={FORM_STYLES}>
+          <div className={FIELD_STYLES}>
+            <Label htmlFor="forgot-password-email">{EMAIL_LABEL}</Label>
             <Input
               id="forgot-password-email"
               type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
               autoComplete="email"
+              {...register('email')}
             />
+            {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
           </div>
 
-          <Button type="submit" disabled={isSubmitting} className="w-full">
-            {isSubmitting ? 'Sending...' : 'Send reset link'}
+          <Button type="submit" disabled={isSubmitting} className={SUBMIT_BUTTON_STYLES}>
+            {isSubmitting ? SUBMITTING_LABEL : SUBMIT_LABEL}
           </Button>
         </form>
 
-        <button
-          type="button"
-          onClick={() => navigate(ROUTES.LOGIN)}
-          className="mt-4 text-sm font-medium text-primary underline-offset-4 hover:underline"
-        >
-          Back to login
+        <button type="button" onClick={() => navigate(ROUTES.LOGIN)} className={LINK_STYLES}>
+          {BACK_TO_LOGIN_LABEL}
         </button>
       </div>
     </div>

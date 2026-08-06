@@ -1,0 +1,9 @@
+export const TITLE = 'Reset your password';
+export const SUBTITLE = "Enter your email address and we'll send a reset link if the account exists.";
+export const EMAIL_LABEL = 'Email';
+export const SUBMIT_LABEL = 'Send reset link';
+export const SUBMITTING_LABEL = 'Sending...';
+export const BACK_TO_LOGIN_LABEL = 'Back to login';
+export const RESET_LINK_SENT_TITLE = 'Reset link sent';
+export const RESET_LINK_SENT_DESCRIPTION = 'If an account exists, check your inbox for the reset link.';
+export const RESET_LINK_ERROR_TITLE = 'Could not send reset link';

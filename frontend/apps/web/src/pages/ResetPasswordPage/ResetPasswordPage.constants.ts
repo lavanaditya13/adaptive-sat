@@ -1,0 +1,14 @@
+export const TITLE = 'Set a new password';
+export const SUBTITLE = 'Choose a new password for your account.';
+export const MISSING_TOKEN_TITLE = 'Reset your password';
+export const MISSING_TOKEN_SUBTITLE = 'This link is missing its reset token.';
+export const NEW_PASSWORD_LABEL = 'New password';
+export const CONFIRM_PASSWORD_LABEL = 'Confirm password';
+export const SUBMIT_LABEL = 'Update password';
+export const SUBMITTING_LABEL = 'Updating...';
+export const BACK_TO_LOGIN_LABEL = 'Back to login';
+export const MISSING_TOKEN_TOAST_TITLE = 'Missing reset token';
+export const MISSING_TOKEN_TOAST_DESCRIPTION = 'Request a new password reset link.';
+export const PASSWORD_UPDATED_TITLE = 'Password updated';
+export const PASSWORD_UPDATED_DESCRIPTION = 'You can now sign in with your new password.';
+export const RESET_ERROR_TITLE = 'Could not reset password';

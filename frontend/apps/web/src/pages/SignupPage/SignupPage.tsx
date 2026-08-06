@@ -1,12 +1,7 @@
 import { SignupForm } from '@/components/auth/SignupForm/SignupForm';
 import { LoginHero } from '@/components/auth/LoginHero/LoginHero';
-import {
-  CONTAINER_STYLES,
-  FORM_PANEL_STYLES,
-  HEADLINE_LEAD,
-  HEADLINE_HIGHLIGHT,
-  SUBCOPY,
-} from './SignupPage.constants';
+import { CONTAINER_STYLES, FORM_PANEL_STYLES } from './SignupPage.styles';
+import { HEADLINE_LEAD, HEADLINE_HIGHLIGHT, SUBCOPY } from './SignupPage.constants';
 
 export function SignupPage() {
   return (

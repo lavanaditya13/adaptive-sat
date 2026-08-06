@@ -27,5 +27,3 @@ export const API = {
       `/api/v1/settings/connected-providers/${provider}`,
   },
 } as const;
-
-// 192.168.1.10:8000

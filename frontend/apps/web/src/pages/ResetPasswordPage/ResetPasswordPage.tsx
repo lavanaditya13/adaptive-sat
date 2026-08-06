@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@workspace/ui/components/button';
 import { Input } from '@workspace/ui/components/input';
@@ -7,71 +8,82 @@ import { resetPassword } from '@/services/auth-service';
 import { useToast } from '@/components/toast/toast-provider';
 import { getApiErrorDetail } from '@/utils/api-errors';
 import { ROUTES } from '@/constants/routes';
+import { resetPasswordSchema, type ResetPasswordFormData } from '@/utils/validation-schemas';
+import {
+  CONTAINER_STYLES,
+  CARD_STYLES,
+  TITLE_STYLES,
+  SUBTITLE_STYLES,
+  FORM_STYLES,
+  FIELD_STYLES,
+  SUBMIT_BUTTON_STYLES,
+  LINK_STYLES,
+} from './ResetPasswordPage.styles';
+import {
+  TITLE,
+  SUBTITLE,
+  MISSING_TOKEN_TITLE,
+  MISSING_TOKEN_SUBTITLE,
+  NEW_PASSWORD_LABEL,
+  CONFIRM_PASSWORD_LABEL,
+  SUBMIT_LABEL,
+  SUBMITTING_LABEL,
+  BACK_TO_LOGIN_LABEL,
+  MISSING_TOKEN_TOAST_TITLE,
+  MISSING_TOKEN_TOAST_DESCRIPTION,
+  PASSWORD_UPDATED_TITLE,
+  PASSWORD_UPDATED_DESCRIPTION,
+  RESET_ERROR_TITLE,
+} from './ResetPasswordPage.constants';
 
 export function ResetPasswordPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const token = searchParams.get('token');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<ResetPasswordFormData>({
+    resolver: zodResolver(resetPasswordSchema),
+  });
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
+  const onSubmit = async (data: ResetPasswordFormData) => {
     if (!token) {
       toast({
-        title: 'Missing reset token',
-        description: 'Request a new password reset link.',
+        title: MISSING_TOKEN_TOAST_TITLE,
+        description: MISSING_TOKEN_TOAST_DESCRIPTION,
         variant: 'destructive',
       });
       return;
     }
 
-    if (password !== confirmPassword) {
-      toast({
-        title: 'Passwords do not match',
-        description: 'Make sure both password fields are identical.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
     try {
-      await resetPassword(token, password);
+      await resetPassword(token, data.password);
       toast({
-        title: 'Password updated',
-        description: 'You can now sign in with your new password.',
+        title: PASSWORD_UPDATED_TITLE,
+        description: PASSWORD_UPDATED_DESCRIPTION,
         variant: 'success',
       });
       navigate(ROUTES.LOGIN);
     } catch (error) {
       toast({
-        title: 'Could not reset password',
+        title: RESET_ERROR_TITLE,
         description: getApiErrorDetail(error),
         variant: 'destructive',
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   if (!token) {
     return (
-      <div className="flex min-h-svh items-center justify-center p-4">
-        <div className="w-full max-w-md rounded-2xl bg-card p-8 text-center ring-1 ring-foreground/10">
-          <h1 className="font-heading text-2xl font-semibold">Reset your password</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This link is missing its reset token.
-          </p>
-          <button
-            type="button"
-            onClick={() => navigate(ROUTES.LOGIN)}
-            className="mt-4 text-sm font-medium text-primary underline-offset-4 hover:underline"
-          >
-            Back to login
+      <div className={CONTAINER_STYLES}>
+        <div className={CARD_STYLES}>
+          <h1 className={TITLE_STYLES}>{MISSING_TOKEN_TITLE}</h1>
+          <p className={SUBTITLE_STYLES}>{MISSING_TOKEN_SUBTITLE}</p>
+          <button type="button" onClick={() => navigate(ROUTES.LOGIN)} className={LINK_STYLES}>
+            {BACK_TO_LOGIN_LABEL}
           </button>
         </div>
       </div>
@@ -79,42 +91,40 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-2xl bg-card p-8 text-center ring-1 ring-foreground/10">
-        <h1 className="font-heading text-2xl font-semibold">Set a new password</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Choose a new password for your account.
-        </p>
+    <div className={CONTAINER_STYLES}>
+      <div className={CARD_STYLES}>
+        <h1 className={TITLE_STYLES}>{TITLE}</h1>
+        <p className={SUBTITLE_STYLES}>{SUBTITLE}</p>
 
-        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4 text-left">
-          <div className="space-y-2">
-            <Label htmlFor="new-password">New password</Label>
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className={FORM_STYLES}>
+          <div className={FIELD_STYLES}>
+            <Label htmlFor="new-password">{NEW_PASSWORD_LABEL}</Label>
             <Input
               id="new-password"
               type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
               autoComplete="new-password"
-              minLength={8}
-              required
+              {...register('password')}
             />
+            {errors.password && (
+              <p className="text-sm text-destructive">{errors.password.message}</p>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirm-password">Confirm password</Label>
+          <div className={FIELD_STYLES}>
+            <Label htmlFor="confirm-password">{CONFIRM_PASSWORD_LABEL}</Label>
             <Input
               id="confirm-password"
               type="password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
               autoComplete="new-password"
-              minLength={8}
-              required
+              {...register('confirmPassword')}
             />
+            {errors.confirmPassword && (
+              <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
+            )}
           </div>
 
-          <Button type="submit" disabled={isSubmitting} className="w-full">
-            {isSubmitting ? 'Updating...' : 'Update password'}
+          <Button type="submit" disabled={isSubmitting} className={SUBMIT_BUTTON_STYLES}>
+            {isSubmitting ? SUBMITTING_LABEL : SUBMIT_LABEL}
           </Button>
         </form>
       </div>
