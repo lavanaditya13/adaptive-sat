@@ -1,4 +1,10 @@
 {
+  "git": {
+    "deploymentEnabled": {
+      "main": true,
+      "develop": true
+    }
+  },
   "builds": [
     { "src": "backend/index.py", "use": "@vercel/python" },
     { "src": "frontend/package.json", "use": "@vercel/static-build", "config": { "distDir": "apps/web/dist" } }
