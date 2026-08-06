@@ -12,3 +12,5 @@ export const EXIT_BUTTON_STYLES = 'text-muted-foreground hover:text-foreground';
 export const LOADING_CONTAINER_STYLES = 'max-w-2xl mx-auto p-6 space-y-6';
 export const SKELETON_BAR_STYLES = 'h-6 w-full';
 export const SKELETON_CARD_STYLES = 'h-64 w-full';
+export const RESUME_ERROR_CONTAINER_STYLES = 'max-w-2xl mx-auto p-6';
+export const RESUME_RETRY_BUTTON_STYLES = 'mt-3';
