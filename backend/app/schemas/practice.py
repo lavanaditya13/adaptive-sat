@@ -115,6 +115,10 @@ class PracticeStartResponse(BaseModel):
     question: Optional[PublicQuestionResponse] = None
 
 
+class PracticeAbandonResponse(BaseModel):
+    status: str
+
+
 class SubmitAnswerRequest(BaseModel):
     selected_answer: Optional[str] = None
     time_spent_seconds: Optional[int] = Field(default=None, ge=0)

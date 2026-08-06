@@ -10,11 +10,16 @@ class PracticeSessionRepository(BaseRepository[PracticeSession]):
 
     async def get_active_session_for_student(self, db: AsyncSession, student_id: int) -> Optional[PracticeSession]:
         """
-        Fetch the currently active/started practice session for a student.
+        Fetch the currently active practice session for a student, if any.
+        Mirrors the active-status predicate in practice_service — "active"
+        means in_progress (still answering) or ready_to_complete (all
+        questions answered, /complete not yet called). Sessions are never
+        given a status of "started"; keep this in sync with
+        app/services/practice_service.py if that predicate changes.
         """
         query = select(PracticeSession).where(
             PracticeSession.student_id == student_id,
-            PracticeSession.status == "started"
+            PracticeSession.status.in_(["in_progress", "ready_to_complete"]),
         )
         result = await db.execute(query)
         return result.scalar_one_or_none()

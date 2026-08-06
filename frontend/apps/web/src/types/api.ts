@@ -95,6 +95,10 @@ interface AnswerResponse {
   remaining_questions: number;
 }
 
+interface AbandonResponse {
+  status: 'abandoned';
+}
+
 interface QuestionResponse {
   current_position: number;
   total_questions: number;
@@ -149,6 +153,7 @@ export type {
   Question,
   StartPracticeResponse,
   AnswerResponse,
+  AbandonResponse,
   QuestionResponse,
   QuestionBreakdownItem,
   CompleteResponse,
