@@ -1,6 +1,6 @@
 import { LoginForm } from '@/components/auth/LoginForm/LoginForm';
 import { LoginHero } from '@/components/auth/LoginHero/LoginHero';
-import { CONTAINER_STYLES, FORM_PANEL_STYLES } from './LoginPage.constants';
+import { CONTAINER_STYLES, FORM_PANEL_STYLES } from './LoginPage.styles';
 
 export function LoginPage() {
   return (
