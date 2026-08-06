@@ -40,7 +40,6 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-this-secret-key"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     RESEND_API_KEY: str = ""
-    RESEND_FROM_EMAIL: str = "Adaptive SAT <onboarding@resend.dev>"
     # Stable production domain — used whenever an environment doesn't set
     # these explicitly (e.g. Production itself, so it doesn't need its own
     # copies of vars that never change). Preview environments and local dev

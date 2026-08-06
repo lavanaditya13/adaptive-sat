@@ -5,7 +5,6 @@ import { getCurrentUser } from '@/services/auth-service';
 import { useAuthStore } from '@/store/auth-store';
 import { useToast } from '@/components/toast/toast-provider';
 import { ROUTES } from '@/constants/routes';
-import type { User } from '@/types/api';
 import {
   CONTAINER_STYLES,
   CARD_STYLES,
@@ -29,30 +28,6 @@ const REASON_MESSAGES: Record<string, string> = {
   email_conflict: ERROR_REASON_EMAIL_CONFLICT,
   provider_error: ERROR_REASON_PROVIDER_ERROR,
 };
-
-const CONFIRM_SESSION_RETRY_COUNT = 5;
-const CONFIRM_SESSION_RETRY_DELAY_MS = 200;
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-async function confirmOAuthSession(): Promise<User> {
-  for (let attempt = 0; attempt < CONFIRM_SESSION_RETRY_COUNT; attempt += 1) {
-    try {
-      const user = await getCurrentUser();
-      return user;
-    } catch (error) {
-      if (attempt === CONFIRM_SESSION_RETRY_COUNT - 1) {
-        throw error;
-      }
-
-      await wait(CONFIRM_SESSION_RETRY_DELAY_MS);
-    }
-  }
-
-  throw new Error('OAuth session confirmation failed.');
-}
 
 export function OAuthCallbackPage() {
   const navigate = useNavigate();
@@ -79,7 +54,7 @@ export function OAuthCallbackPage() {
       return;
     }
 
-    confirmOAuthSession()
+    getCurrentUser()
       .then((user) => {
         setUser(user);
         navigate(ROUTES.DASHBOARD, { replace: true });

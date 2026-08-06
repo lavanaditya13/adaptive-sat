@@ -7,6 +7,7 @@ import { Label } from '@workspace/ui/components/label';
 import { RadioGroup, RadioGroupItem } from '@workspace/ui/components/radio-group';
 import { signupSchema, type SignupFormData } from '@/utils/validation-schemas';
 import { signup } from '@/services/auth-service';
+import { useAuthStore } from '@/store/auth-store';
 import { ROUTES } from '@/constants/routes';
 import { getApiErrorDetail } from '@/utils/api-errors';
 import { useToast } from '@/components/toast/toast-provider';
@@ -40,6 +41,7 @@ import {
 
 export function SignupForm() {
   const navigate = useNavigate();
+  const setUser = useAuthStore((state) => state.setUser);
   const { toast } = useToast();
   const {
     register,
@@ -55,7 +57,8 @@ export function SignupForm() {
   const onSubmit = async (data: SignupFormData) => {
     try {
       const user = await signup(data);
-      navigate(`${ROUTES.CHECK_EMAIL}?email=${encodeURIComponent(user.email)}`);
+      setUser(user);
+      navigate(ROUTES.CHECK_EMAIL);
     } catch (error) {
       toast({
         title: 'Signup failed',

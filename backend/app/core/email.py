@@ -23,10 +23,9 @@ def send_email(
     subject: str,
     html: str,
     *,
-    from_email: str | None = None,
+    from_email: str = DEFAULT_FROM_EMAIL,
 ) -> Any:
     api_key = (settings.RESEND_API_KEY or "").strip()
-    sender = (from_email or settings.RESEND_FROM_EMAIL or DEFAULT_FROM_EMAIL).strip()
 
     if not api_key:
         raise EmailConfigurationError(
@@ -38,7 +37,7 @@ def send_email(
     try:
         return resend.Emails.send(
             {
-                "from": sender,
+                "from": from_email,
                 "to": to,
                 "subject": subject,
                 "html": html,

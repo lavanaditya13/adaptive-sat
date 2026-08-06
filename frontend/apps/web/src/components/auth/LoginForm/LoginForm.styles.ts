@@ -4,6 +4,6 @@ export const SUBTITLE_STYLES = 'mt-1 text-sm text-muted-foreground';
 export const formStyles = 'mt-6 flex flex-col gap-4';
 export const inputStyles = 'w-full';
 export const LABEL_ROW_STYLES = 'flex items-center justify-between';
-export const forgotPasswordStyles = 'text-xs font-medium text-primary underline-offset-4 hover:underline';
+export const forgotPasswordStyles = 'text-xs text-muted-foreground hover:text-foreground';
 export const buttonStyles = 'w-full';
 export const linkStyles = 'font-medium text-primary underline-offset-4 hover:underline';
