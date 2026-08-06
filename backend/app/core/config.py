@@ -44,8 +44,22 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str = "change-this-secret-key"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
-    RESEND_API_KEY: str = ""
-    RESEND_FROM_EMAIL: str = "Adaptive SAT <onboarding@resend.dev>"
+    RESEND_API_KEY: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "RESEND_API_KEY",
+            "added_RESEND_API_KEY",
+            "ADDED_RESEND_API_KEY",
+        ),
+    )
+    RESEND_FROM_EMAIL: str = Field(
+        default="Adaptive SAT <onboarding@resend.dev>",
+        validation_alias=AliasChoices(
+            "RESEND_FROM_EMAIL",
+            "added_RESEND_FROM_EMAIL",
+            "ADDED_RESEND_FROM_EMAIL",
+        ),
+    )
     # Stable production domain — used whenever an environment doesn't set
     # these explicitly (e.g. Production itself, so it doesn't need its own
     # copies of vars that never change). Preview environments and local dev
