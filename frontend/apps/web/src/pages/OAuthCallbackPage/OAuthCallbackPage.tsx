@@ -19,19 +19,10 @@ import {
   LOADING_SUBTITLE,
   ERROR_TITLE,
   ERROR_SUBTITLE_DEFAULT,
-  ERROR_REASON_ACCESS_DENIED,
-  ERROR_REASON_EMAIL_CONFLICT,
-  ERROR_REASON_PROVIDER_ERROR,
+  REASON_MESSAGES,
+  CONFIRM_SESSION_RETRY_COUNT,
+  CONFIRM_SESSION_RETRY_DELAY_MS,
 } from './OAuthCallbackPage.constants';
-
-const REASON_MESSAGES: Record<string, string> = {
-  access_denied: ERROR_REASON_ACCESS_DENIED,
-  email_conflict: ERROR_REASON_EMAIL_CONFLICT,
-  provider_error: ERROR_REASON_PROVIDER_ERROR,
-};
-
-const CONFIRM_SESSION_RETRY_COUNT = 5;
-const CONFIRM_SESSION_RETRY_DELAY_MS = 200;
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
