@@ -3,13 +3,19 @@
 # Run the Adaptive SAT backend and/or frontend dev servers locally.
 #
 # Usage:
-#   ./scripts/dev.sh [backend|frontend|all|stop]
+#   ./scripts/dev.sh [backend|frontend|all|stop] [--seed|--no-seed]
 #
 #   backend   Start only the FastAPI backend on http://localhost:8000
 #   frontend  Start only the Vite frontend on http://localhost:5173
 #   all       Start both together (default). Both run in the background with
 #             their combined logs streamed to this terminal; Ctrl+C stops both.
 #   stop      Kill anything already listening on ports 8000/5173
+#
+#   --seed     Run Alembic migrations + the SAT question seed before starting
+#              the backend (default). Safe to run every time — migrations
+#              no-op once current, and the seed script skips rows it already
+#              inserted.
+#   --no-seed  Still applies migrations, but skips the question seed.
 #
 set -uo pipefail
 set -m # each backgrounded job gets its own process group, so cleanup() can
@@ -26,6 +32,16 @@ FRONTEND_LOG="$LOG_DIR/frontend.log"
 BACKEND_PID=""
 FRONTEND_PID=""
 TAIL_PID=""
+SEED_DATA=true
+MODE="all"
+
+for arg in "$@"; do
+  case "$arg" in
+    --no-seed) SEED_DATA=false ;;
+    --seed) SEED_DATA=true ;;
+    *) MODE="$arg" ;;
+  esac
+done
 
 cleanup() {
   if [ -n "$TAIL_PID" ] && kill -0 "$TAIL_PID" 2>/dev/null; then
@@ -108,13 +124,31 @@ backend_via_docker() {
     exit 1
   fi
   echo "[backend] backend/.env not found — starting via Docker (backend/scripts/start_backend.sh)"
-  "$BACKEND_DIR/scripts/start_backend.sh"
+  local docker_args=()
+  [ "$SEED_DATA" = false ] && docker_args+=(--no-seed)
+  "$BACKEND_DIR/scripts/start_backend.sh" "${docker_args[@]}"
+}
+
+# Runs migrations (and, unless --no-seed, the idempotent question seed)
+# against whatever DATABASE_URL backend/.env points at. Cheap and safe to
+# run on every dev.sh invocation: alembic no-ops once up to date, and
+# seed_sat_questions.py skips any topic/question it's already inserted —
+# it's keyed off Topic.code and (topic_id, prompt), not run-once state.
+prepare_backend_db() {
+  echo "[backend] applying migrations..."
+  (cd "$BACKEND_DIR" && poetry run alembic upgrade head)
+
+  if [ "$SEED_DATA" = true ]; then
+    echo "[backend] seeding SAT questions (idempotent — skips rows that already exist)..."
+    (cd "$BACKEND_DIR" && poetry run python scripts/seed_sat_questions.py)
+  fi
 }
 
 # --- solo, foreground (direct terminal output, Ctrl+C stops it directly) ---
 
 start_backend_foreground() {
   if backend_prereqs_ok; then
+    prepare_backend_db
     echo "[backend] starting on http://localhost:8000 (poetry run uvicorn --reload)"
     (cd "$BACKEND_DIR" && poetry run uvicorn app.main:app --reload --port 8000)
   else
@@ -133,6 +167,7 @@ start_frontend_foreground() {
 
 start_backend_background() {
   if backend_prereqs_ok; then
+    prepare_backend_db
     mkdir -p "$LOG_DIR"
     echo "[backend] starting on http://localhost:8000 (logs: $BACKEND_LOG)"
     (cd "$BACKEND_DIR" && poetry run uvicorn app.main:app --reload --port 8000) > "$BACKEND_LOG" 2>&1 &
@@ -184,7 +219,7 @@ stop_all() {
   fi
 }
 
-case "${1:-all}" in
+case "$MODE" in
   backend)
     start_backend_foreground
     ;;
@@ -198,11 +233,11 @@ case "${1:-all}" in
     stop_all
     ;;
   -h|--help|help)
-    sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
-    echo "Unknown command: $1"
-    echo "Usage: $0 [backend|frontend|all|stop]"
+    echo "Unknown command: $MODE"
+    echo "Usage: $0 [backend|frontend|all|stop] [--seed|--no-seed]"
     exit 1
     ;;
 esac
