@@ -1,0 +1,102 @@
+name: Seed Database
+
+# Triggers on push rather than Vercel's deployment_status event: Vercel's
+# GitHub integration sends the commit SHA (not the branch name) in
+# `deployment.ref` on non-Enterprise accounts, so a branch-name comparison
+# against that field never matches and the workflow would silently never
+# run. Reacting to push directly sidesteps that entirely, and is just as
+# safe here — migrating/seeding the database doesn't depend on whether the
+# Vercel frontend build itself succeeds.
+#
+# Both Vercel projects (adaptive-sat and adaptive-sat-backend) also happen
+# to deploy on every push, so nothing here needs to coordinate with them:
+# migrations no-op once applied, and seed_sat_questions.py only inserts
+# rows it hasn't already inserted (keyed on Topic.code and
+# (topic_id, prompt)) — a second run just reports everything skipped. The
+# concurrency group still serializes same-branch runs so two pushes
+# landing seconds apart can't race each other against the same database.
+on:
+  push:
+    branches: [develop, main]
+
+jobs:
+  seed-preview:
+    name: Seed Preview DB (develop)
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: seed-db-preview
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Symlink pyproject.toml / poetry.lock
+        run: |
+          ln -sf poetry-project.toml pyproject.toml
+          ln -sf poetry-project.lock poetry.lock
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --only main
+
+      - name: Apply migrations
+        run: poetry run alembic upgrade head
+        env:
+          DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+
+      - name: Seed SAT questions (idempotent)
+        run: poetry run python scripts/seed_sat_questions.py
+        env:
+          DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+
+  seed-production:
+    name: Seed Production DB (main)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Requires a GitHub Environment named "production" with a required
+    # reviewer configured (Settings -> Environments -> production -> add
+    # yourself under "Required reviewers"). Without that environment
+    # protection rule configured, this job runs immediately with no gate —
+    # the `environment:` key alone doesn't enforce approval, the reviewer
+    # rule attached to it does. Preview intentionally has no such gate.
+    environment: production
+    concurrency:
+      group: seed-db-production
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Symlink pyproject.toml / poetry.lock
+        run: |
+          ln -sf poetry-project.toml pyproject.toml
+          ln -sf poetry-project.lock poetry.lock
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --only main
+
+      - name: Apply migrations
+        run: poetry run alembic upgrade head
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+
+      - name: Seed SAT questions (idempotent)
+        run: poetry run python scripts/seed_sat_questions.py
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
