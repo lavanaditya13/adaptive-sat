@@ -1,0 +1,99 @@
+name: Seed Database
+
+# Vercel's GitHub integration posts a `deployment` + `deployment_status`
+# event for every deploy it makes on this repo. Firing on that (rather than
+# on `push`) means this only runs after Vercel actually reports success —
+# a push that fails to build never triggers a seed attempt.
+#
+# Both Vercel projects (adaptive-sat and adaptive-sat-backend) deploy on
+# every push to main/develop, so this can fire twice per push. That's fine:
+# migrations no-op once applied, and seed_sat_questions.py only inserts
+# rows it hasn't already inserted (keyed on Topic.code and
+# (topic_id, prompt)) — a second run just reports everything skipped. The
+# concurrency group still serializes same-branch runs so two deploys
+# landing seconds apart can't race each other against the same database.
+on:
+  deployment_status:
+
+jobs:
+  seed-preview:
+    name: Seed Preview DB (develop)
+    if: >
+      github.event.deployment_status.state == 'success' &&
+      github.event.deployment.ref == 'develop'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: seed-db-preview
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Symlink pyproject.toml / poetry.lock
+        run: |
+          ln -sf poetry-project.toml pyproject.toml
+          ln -sf poetry-project.lock poetry.lock
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --only main
+
+      - name: Apply migrations
+        run: poetry run alembic upgrade head
+        env:
+          DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+
+      - name: Seed SAT questions (idempotent)
+        run: poetry run python scripts/seed_sat_questions.py
+        env:
+          DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+
+  seed-production:
+    name: Seed Production DB (main)
+    if: >
+      github.event.deployment_status.state == 'success' &&
+      github.event.deployment.ref == 'main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: seed-db-production
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Symlink pyproject.toml / poetry.lock
+        run: |
+          ln -sf poetry-project.toml pyproject.toml
+          ln -sf poetry-project.lock poetry.lock
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --only main
+
+      - name: Apply migrations
+        run: poetry run alembic upgrade head
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+
+      - name: Seed SAT questions (idempotent)
+        run: poetry run python scripts/seed_sat_questions.py
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
