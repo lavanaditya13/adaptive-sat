@@ -5,6 +5,7 @@ import { getCurrentUser } from '@/services/auth-service';
 import { useAuthStore } from '@/store/auth-store';
 import { useToast } from '@/components/toast/toast-provider';
 import { ROUTES } from '@/constants/routes';
+import type { User } from '@/types/api';
 import {
   CONTAINER_STYLES,
   CARD_STYLES,
@@ -18,16 +19,31 @@ import {
   LOADING_SUBTITLE,
   ERROR_TITLE,
   ERROR_SUBTITLE_DEFAULT,
-  ERROR_REASON_ACCESS_DENIED,
-  ERROR_REASON_EMAIL_CONFLICT,
-  ERROR_REASON_PROVIDER_ERROR,
+  REASON_MESSAGES,
+  CONFIRM_SESSION_RETRY_COUNT,
+  CONFIRM_SESSION_RETRY_DELAY_MS,
 } from './OAuthCallbackPage.constants';
 
-const REASON_MESSAGES: Record<string, string> = {
-  access_denied: ERROR_REASON_ACCESS_DENIED,
-  email_conflict: ERROR_REASON_EMAIL_CONFLICT,
-  provider_error: ERROR_REASON_PROVIDER_ERROR,
-};
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function confirmOAuthSession(): Promise<User> {
+  for (let attempt = 0; attempt < CONFIRM_SESSION_RETRY_COUNT; attempt += 1) {
+    try {
+      const user = await getCurrentUser();
+      return user;
+    } catch (error) {
+      if (attempt === CONFIRM_SESSION_RETRY_COUNT - 1) {
+        throw error;
+      }
+
+      await wait(CONFIRM_SESSION_RETRY_DELAY_MS);
+    }
+  }
+
+  throw new Error('OAuth session confirmation failed.');
+}
 
 export function OAuthCallbackPage() {
   const navigate = useNavigate();
@@ -54,7 +70,7 @@ export function OAuthCallbackPage() {
       return;
     }
 
-    getCurrentUser()
+    confirmOAuthSession()
       .then((user) => {
         setUser(user);
         navigate(ROUTES.DASHBOARD, { replace: true });

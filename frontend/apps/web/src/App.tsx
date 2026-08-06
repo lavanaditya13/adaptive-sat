@@ -6,6 +6,8 @@ import { useAuthStore } from '@/store/auth-store';
 import {
   LoginPage,
   SignupPage,
+  ForgotPasswordPage,
+  ResetPasswordPage,
   DashboardPage,
   PracticePage,
   ResultsPage,
@@ -60,6 +62,15 @@ export function App() {
           </GuestRoute>
         }
       />
+      <Route
+        path={ROUTES.FORGOT_PASSWORD}
+        element={
+          <GuestRoute>
+            <ForgotPasswordPage />
+          </GuestRoute>
+        }
+      />
+      <Route path={ROUTES.RESET_PASSWORD} element={<ResetPasswordPage />} />
       {/* Ungated: reachable regardless of current auth state — a fresh signup,
           an emailed link click, or an OAuth redirect may land here before (or
           without ever) establishing client-side session state. */}
