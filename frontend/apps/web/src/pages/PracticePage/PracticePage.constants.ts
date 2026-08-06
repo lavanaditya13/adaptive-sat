@@ -12,3 +12,7 @@ export const EXIT_DIALOG_DESCRIPTION =
 export const EXIT_DIALOG_CONFIRM = 'Exit Practice';
 export const EXIT_DIALOG_CANCEL = 'Continue Practice';
 export const ERROR_SAVING_ANSWER = 'Failed to save answer. Please try again.';
+export const RESUME_ERROR_TITLE = "Couldn't reach the server";
+export const RESUME_ERROR_DESCRIPTION =
+  "Your test is still saved — this looks like a connection issue, not a lost session. Check your connection and try again.";
+export const RESUME_RETRY_LABEL = 'Try again';
