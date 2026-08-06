@@ -16,6 +16,7 @@ import type {
   SectionContextResponse,
   StartPracticeResponse,
   AnswerResponse,
+  AbandonResponse,
   QuestionResponse,
   CompleteResponse,
 } from '@/types/api';
@@ -39,6 +40,11 @@ export const mockHandlers = {
       total_questions: MOCK_QUESTIONS.length,
       question: MOCK_QUESTIONS[0],
     };
+  },
+
+  abandonPractice: async (): Promise<AbandonResponse> => {
+    activeQuestionIndex = 0;
+    return { status: 'abandoned' };
   },
 
   submitAnswer: async (

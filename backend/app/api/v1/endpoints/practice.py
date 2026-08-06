@@ -5,6 +5,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.practice import (
+    PracticeAbandonResponse,
     PracticeCompleteResponse,
     PracticeQuestionResponse,
     PracticeStartRequest,
@@ -15,6 +16,7 @@ from app.schemas.practice import (
     SubmitAnswerResponse,
 )
 from app.services.practice_service import (
+    abandon_practice_session,
     complete_practice_session,
     get_current_question,
     get_next_question,
@@ -42,6 +44,14 @@ async def start_practice(
     db: AsyncSession = Depends(get_db),
 ):
     return await start_practice_session(db=db, request=request, student=current_user)
+
+
+@router.post("/abandon", response_model=PracticeAbandonResponse)
+async def abandon_session(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await abandon_practice_session(db=db, student=current_user)
 
 
 @router.post("/answer", response_model=SubmitAnswerResponse)

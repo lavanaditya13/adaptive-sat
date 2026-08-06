@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -18,6 +19,7 @@ from app.models.topic import Topic
 from app.models.user import User
 from app.schemas.practice import (
     AdaptiveUnlockResponse,
+    PracticeAbandonResponse,
     PracticeCompleteResponse,
     PracticeQuestionResponse,
     PracticeStartRequest,
@@ -225,6 +227,26 @@ async def _get_active_session_for_student(
     return session
 
 
+async def _get_latest_attempt_at(
+    db: AsyncSession,
+    session_id: int,
+) -> datetime | None:
+    result = await db.execute(
+        select(func.max(Attempt.created_at)).where(
+            Attempt.practice_session_id == session_id
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+def _is_session_stale(session: PracticeSession, last_attempt_at: datetime | None) -> bool:
+    last_activity_at = last_attempt_at or session.created_at
+    stale_cutoff = datetime.now(timezone.utc) - timedelta(
+        minutes=settings.PRACTICE_SESSION_STALE_MINUTES
+    )
+    return last_activity_at < stale_cutoff
+
+
 async def _get_next_assigned_question(
     db: AsyncSession,
     session_id: int,
@@ -279,10 +301,20 @@ async def start_practice_session(
     active_session = existing_session_result.scalar_one_or_none()
 
     if active_session is not None:
-        raise HTTPException(
-            status_code=409,
-            detail="A practice session is already in progress for this student.",
-        )
+        last_attempt_at = await _get_latest_attempt_at(db=db, session_id=active_session.id)
+
+        if not _is_session_stale(active_session, last_attempt_at):
+            raise HTTPException(
+                status_code=409,
+                detail="A practice session is already in progress for this student.",
+            )
+
+        # Stale and either never answered or idle past the timeout — supersede
+        # it rather than leaving the student permanently locked out. A student
+        # who explicitly wants to abandon a fresh session should use
+        # abandon_practice_session instead of waiting for this to kick in.
+        active_session.status = "abandoned"
+        await db.flush()
 
     question_count = request.question_count or settings.DEFAULT_PRACTICE_QUESTION_COUNT
     selected_section_id = await _get_selected_section_id(db=db, student_id=student.id)
@@ -365,7 +397,17 @@ async def start_practice_session(
     )
 
     db.add(session)
-    await db.flush()
+
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Lost a race against a concurrent /start for the same student — the
+        # partial unique index on practice_sessions(student_id) caught it.
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="A practice session is already in progress for this student.",
+        )
 
     for index, question in enumerate(questions, start=1):
         db.add(
@@ -554,6 +596,21 @@ async def get_next_question(
     student: User,
 ) -> PracticeQuestionResponse:
     return await get_current_question(db=db, student=student)
+
+
+async def abandon_practice_session(
+    db: AsyncSession,
+    student: User,
+) -> PracticeAbandonResponse:
+    """Let a student explicitly give up their in-progress session so they can
+    start a new one immediately, instead of waiting for the staleness window
+    in start_practice_session to kick in."""
+    session = await _get_active_session_for_student(db=db, student_id=student.id)
+
+    session.status = "abandoned"
+    await db.commit()
+
+    return PracticeAbandonResponse(status=session.status)
 
 
 async def complete_practice_session(

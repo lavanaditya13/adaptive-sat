@@ -40,6 +40,10 @@ class Settings(BaseSettings):
 
     # Practice settings
     DEFAULT_PRACTICE_QUESTION_COUNT: int = 25
+    # A session with no attempts and no activity for this long is treated as
+    # abandoned and auto-superseded the next time the student starts practice,
+    # instead of permanently blocking them with a 409.
+    PRACTICE_SESSION_STALE_MINUTES: int = 180
 
     # Security
     SECRET_KEY: str = "change-this-secret-key"
