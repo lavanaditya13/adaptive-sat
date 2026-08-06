@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from urllib.parse import (
     parse_qsl,
     quote_plus,
@@ -11,9 +12,13 @@ from pydantic import AliasChoices, Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+BACKEND_ENV_FILE = BACKEND_ROOT / ".env"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(BACKEND_ENV_FILE),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
