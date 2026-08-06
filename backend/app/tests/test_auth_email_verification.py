@@ -95,10 +95,29 @@ async def test_send_verification_email_builds_resend_message(monkeypatch, unveri
 
 
 @pytest.mark.asyncio
+async def test_send_password_reset_email_builds_resend_message(monkeypatch, verified_user):
+    captured = {}
+
+    def fake_send_email(**kwargs):
+        captured.update(kwargs)
+        return {"id": "email_456"}
+
+    monkeypatch.setattr(auth_service, "send_email", fake_send_email)
+
+    await auth_service.send_password_reset_email(verified_user)
+
+    assert captured["to"] == "student@example.com"
+    assert captured["subject"] == auth_service.DEFAULT_PASSWORD_RESET_SUBJECT
+    assert "Reset my password" in captured["html"]
+    assert "/reset-password?token=" in captured["html"]
+
+
+@pytest.mark.asyncio
 async def test_verify_email_endpoint_marks_user_verified(monkeypatch, unverified_user):
     token = auth_service.create_email_verification_token(unverified_user.id)
     updated_user = SimpleNamespace(**unverified_user.__dict__)
     updated_user.email_verified = True
+    response = Response()
 
     monkeypatch.setattr(
         auth_service.user_repository,
@@ -113,11 +132,13 @@ async def test_verify_email_endpoint_marks_user_verified(monkeypatch, unverified
 
     result = await auth_module.verify_email_endpoint(
         VerifyEmailRequest(token=token),
+        response,
         db=SimpleNamespace(),
     )
 
     assert result.user.email_verified is True
     auth_service.user_repository.update.assert_awaited_once()
+    assert "set-cookie" in response.headers
 
 
 @pytest.mark.asyncio
@@ -132,9 +153,12 @@ async def test_verify_email_rejects_expired_token(monkeypatch):
         algorithm="HS256",
     )
 
+    response = Response()
+
     with pytest.raises(HTTPException) as exc_info:
         await auth_module.verify_email_endpoint(
             VerifyEmailRequest(token=expired_token),
+            response,
             db=SimpleNamespace(),
         )
 
