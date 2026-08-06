@@ -1,5 +1,7 @@
 export { LoginPage } from './LoginPage/LoginPage';
 export { SignupPage } from './SignupPage/SignupPage';
+export { ForgotPasswordPage } from './ForgotPasswordPage/ForgotPasswordPage';
+export { ResetPasswordPage } from './ResetPasswordPage/ResetPasswordPage';
 export { DashboardPage } from './DashboardPage/DashboardPage';
 export { PracticePage } from './PracticePage/PracticePage';
 export { ResultsPage } from './ResultsPage/ResultsPage';
