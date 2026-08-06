@@ -3,16 +3,7 @@ from app.schemas.topic import TopicBase, TopicCreate, TopicUpdate, TopicResponse
 from app.schemas.question import QuestionBase, QuestionCreate, QuestionUpdate, QuestionResponse
 from app.schemas.attempt import AttemptBase, AttemptCreate, AttemptUpdate, AttemptResponse
 from app.schemas.study_plan import StudyPlanBase, StudyPlanCreate, StudyPlanUpdate, StudyPlanResponse
-from app.schemas.auth import (
-    SignupRequest,
-    LoginRequest,
-    AuthResponse,
-    ResendVerificationByEmailRequest,
-    ForgotPasswordRequest,
-    ResetPasswordRequest,
-    RefreshRequest,
-    RefreshResponse,
-)
+from app.schemas.auth import SignupRequest, LoginRequest, AuthResponse, RefreshRequest, RefreshResponse
 from app.schemas.settings import ConnectedProviderItem, ConnectedProvidersResponse
 from app.schemas.practice import (
     AdaptiveUnlockResponse,
@@ -61,9 +52,6 @@ __all__ = [
     "SignupRequest",
     "LoginRequest",
     "AuthResponse",
-    "ResendVerificationByEmailRequest",
-    "ForgotPasswordRequest",
-    "ResetPasswordRequest",
     "RefreshRequest",
     "RefreshResponse",
     "ConnectedProviderItem",

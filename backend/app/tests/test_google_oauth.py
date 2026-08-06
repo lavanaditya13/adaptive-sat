@@ -108,7 +108,7 @@ async def test_google_callback_creates_new_google_user(monkeypatch, google_profi
 
 
 @pytest.mark.asyncio
-async def test_google_callback_existing_password_email_returns_conflict(monkeypatch, google_profile):
+async def test_google_callback_links_existing_password_user(monkeypatch, google_profile):
     existing_user = SimpleNamespace(
         id=22,
         email=google_profile["email"],
@@ -119,6 +119,17 @@ async def test_google_callback_existing_password_email_returns_conflict(monkeypa
         oauth_id=None,
         hashed_password="hashed-password",
     )
+    linked_user = SimpleNamespace(
+        id=22,
+        email=google_profile["email"],
+        full_name="Existing Student",
+        role="student",
+        email_verified=True,
+        oauth_provider="google",
+        oauth_id=google_profile["sub"],
+        hashed_password="hashed-password",
+    )
+
     monkeypatch.setattr(auth_module.settings, "GOOGLE_CLIENT_ID", "client-id")
     monkeypatch.setattr(auth_module.settings, "GOOGLE_CLIENT_SECRET", "client-secret")
     monkeypatch.setattr(auth_module.settings, "GOOGLE_REDIRECT_URI", "http://localhost:8000/api/v1/auth/google/callback")
@@ -150,6 +161,12 @@ async def test_google_callback_existing_password_email_returns_conflict(monkeypa
         "get_by_email",
         AsyncMock(return_value=existing_user),
     )
+    update_mock = AsyncMock(return_value=linked_user)
+    monkeypatch.setattr(
+        oauth_service.user_repository,
+        "update",
+        update_mock,
+    )
     monkeypatch.setattr(
         oauth_service.user_repository,
         "create_user",
@@ -165,5 +182,10 @@ async def test_google_callback_existing_password_email_returns_conflict(monkeypa
     )
 
     assert response.status_code == 302
-    assert response.headers["location"] == "http://localhost:5173/oauth/callback?status=error&reason=email_conflict"
-    assert "set-cookie" not in response.headers
+    assert response.headers["location"] == "http://localhost:5173/oauth/callback"
+    assert "session-token" in response.headers["set-cookie"]
+
+    update_payload = update_mock.call_args.kwargs["obj_in"]
+    assert update_payload["oauth_provider"] == "google"
+    assert update_payload["oauth_id"] == google_profile["sub"]
+    assert update_payload["email_verified"] is True
