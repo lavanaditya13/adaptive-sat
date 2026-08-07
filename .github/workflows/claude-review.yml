@@ -1,0 +1,170 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [develop]
+
+# Least-privilege: only what gh pr comment / inline comments need.
+# Deliberately NOT pull_request_target — this keeps GITHUB_TOKEN unprivileged
+# (and secrets unavailable) for PRs from forks, so the review job can't be
+# tricked into running with elevated permissions against untrusted code.
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  review:
+    # Fork PRs won't have CLAUDE_CODE_OAUTH_TOKEN available (GitHub withholds
+    # secrets from fork-triggered pull_request runs) — skip cleanly instead
+    # of failing the job when the secret is empty.
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          use_sticky_comment: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            BASE BRANCH: ${{ github.event.pull_request.base.ref }}
+
+            You are doing a pre-merge review of this pull request into `develop`
+            for the Adaptive SAT repo. The PR branch is already checked out in
+            the working directory. This review is advisory only: read-only,
+            no commits, no file edits, no workflow changes.
+
+            ## 0. Ground yourself first
+
+            Before looking at the diff, read `CLAUDE.md` at the repo root in
+            full — it is this repo's architecture contract. Also check
+            `docs/*.md` (e.g. `docs/BACKEND_CONTRACT_AUTH.md`) for any
+            contract doc relevant to files this PR touches. Everything below
+            is judged against what those documents actually say, not generic
+            best practice — quote the specific rule you're applying when you
+            flag something.
+
+            Concretely, this repo's rules include (verify against CLAUDE.md,
+            it is the source of truth, not this list):
+            - Backend layering: `api/v1/endpoints/*.py` must stay thin and
+              delegate to `services/*.py`; business logic that leaks into
+              endpoint handlers, or DB queries issued directly from endpoints,
+              is an architecture violation.
+            - `app/services/*.py` functions are free functions taking
+              `db: AsyncSession` + explicit args — not classes/methods.
+            - `get_current_user` (app/core/security.py) must accept BOTH the
+              `Authorization: Bearer` header AND the `access_token` cookie —
+              any auth-touching change that checks only one is a bug.
+            - `backend/poetry-project.toml` / `poetry-project.lock` /
+              `requirements.txt` must never be renamed to `pyproject.toml` /
+              `poetry.lock` — that breaks the Vercel backend build. If
+              `poetry-project.toml` changes, `requirements.txt` must be
+              re-exported to match (see CLAUDE.md and `.github/workflows/ci.yml`'s
+              sync check) — flag drift if you can detect it.
+            - Frontend: `pages/<Name>/` and `components/<domain>/<Name>/` follow
+              the `.tsx` + `.constants.ts` + `.styles.ts` convention; server
+              state goes through `services/*.ts` + React Query, not ad hoc
+              fetches in components; API paths belong in
+              `constants/api-endpoints.ts`, not inlined strings; query keys
+              belong in `constants/query-keys.ts`.
+            - Frontend and backend are one same-origin Vercel deployment —
+              changes that hardcode absolute API URLs or reintroduce CORS
+              workarounds instead of using `constants/environment.ts` are a
+              regression.
+
+            ## 1. Gather full context, not just the diff hunks
+
+            Run `gh pr view --json files,additions,deletions,title,body` and
+            `gh pr diff` to see everything that changed. Where a change's
+            correctness depends on surrounding code you can't see in the diff
+            (e.g. does this new service function get called from a thin
+            endpoint elsewhere? does this new component reuse an existing
+            pattern?), use Read/Grep/Glob to pull in that context before
+            judging it. Don't flag something as inconsistent without having
+            actually checked the pattern it should match.
+
+            ## 2. What to review
+
+            - **Architecture**: layering violations, misplaced logic, broken
+              conventions per CLAUDE.md (see above), scope creep / unrequested
+              abstraction, inconsistency with how the rest of the codebase
+              solves the same problem.
+            - **Security** (treat as a security-hotspot sweep, OWASP-flavored):
+              SQL injection (raw/string-built SQL bypassing SQLAlchemy
+              parameterization), broken/missing auth or authorization checks,
+              JWT handling (weak secret handling, missing/looser expiry,
+              algorithm confusion), input validation gaps (missing/loose
+              Pydantic constraints), hardcoded secrets or credentials, CORS
+              misconfiguration, XSS (`dangerouslySetInnerHTML`, unescaped
+              user content), open redirects (OAuth callback / redirect URLs),
+              SSRF, unsafe deserialization, sensitive data in logs or error
+              responses, newly introduced dependencies with known CVEs.
+            - **Correctness bugs**: logic errors, off-by-one, unhandled
+              async/await edge cases, race conditions, incorrect error
+              handling, broken edge cases in the practice/scoring/adaptive
+              pipeline (`practice_service.py`, `skill_scoring_service.py`,
+              `recommendation_service.py` — these three share state derived
+              from `Attempt`, so check all three when one changes).
+            - **Code smells / bad practice** — report these too, always, even
+              when minor and even when not "breaking": duplication, dead
+              code, unclear naming, missing/weak typing, overly complex
+              functions, magic numbers/strings that belong in `constants/`.
+              Never silently drop a finding because it seems too small to
+              matter — surface it with an appropriately low severity instead
+              and let the human decide whether to act on it.
+
+            Do NOT flag: lockfiles, generated files, existing Alembic
+            migration files (historical, not to be edited), or the
+            `poetry-project.toml`/symlink naming scheme itself (that's an
+            intentional, documented workaround — see CLAUDE.md — not a bug).
+
+            ## 3. Classify every finding like a SonarQube issue
+
+            For each finding, assign:
+            - **Type**: Bug | Vulnerability | Security Hotspot | Code Smell
+            - **Severity**: Blocker | Critical | Major | Minor | Info
+
+            ## 4. Required format for every finding
+
+            Post each finding as an inline comment on the exact diff line via
+            `mcp__github_inline_comment__create_inline_comment` (pass
+            `confirmed: true`). If a finding is cross-file / architectural and
+            can't be anchored to one diff line, include it in the summary
+            comment instead. Every single finding — inline or in the summary —
+            must use this structure, no exceptions:
+
+            ```
+            [SEVERITY] [TYPE] <one-line title> — <file path>:<line>
+
+            Problem: <1-2 sentences, what's wrong>
+            Impact: <1-2 sentences, concrete consequence if left as-is>
+            Solution: <1-2 sentences, what to change>
+
+            ```<language>
+            <2-10 line snippet showing the fix, in the actual file's language>
+            ```
+            ```
+
+            ## 5. Summary comment
+
+            Use `gh pr comment` for exactly one top-level summary (the sticky
+            comment will keep it updated across pushes to this PR — don't post
+            duplicate summaries). Include:
+            - Overall risk rating: Low / Medium / High / Critical
+            - Finding counts by severity (table or list)
+            - A short "what a human reviewer should focus on" section for
+              judgment calls that need a person — architecture/design
+              tradeoffs, product intent, anything you're unsure about. Do NOT
+              repeat the mechanical findings here, only what still needs
+              human judgment.
+
+          claude_args: |
+            --max-turns 40
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Read,Grep,Glob,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*)"
