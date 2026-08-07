@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.constants import PRACTICE_SESSION_STATUS_COMPLETED
 from app.models.practice_session import PracticeSession
 from app.models.question import Question
 from app.models.section import Section
@@ -64,7 +65,7 @@ async def get_student_dashboard(
         .select_from(PracticeSession)
         .where(
             PracticeSession.student_id == student_id,
-            PracticeSession.status == "completed",
+            PracticeSession.status == PRACTICE_SESSION_STATUS_COMPLETED,
         )
     )
     sessions_completed = sessions_completed_result.scalar_one()
@@ -135,6 +136,11 @@ async def update_target_score(
     request: UpdateTargetScoreRequest,
 ) -> EstimatedScoreResponse:
     student.target_score = request.target_score
+    # Explicitly re-attach: in production `student` already comes from this
+    # same request's db session (via get_current_user), so this is a no-op,
+    # but it makes the function correct on its own terms rather than
+    # implicitly depending on the caller's session state.
+    db.add(student)
     await db.commit()
 
     section_accuracy = await compute_section_accuracy(db=db, student_id=student.id)

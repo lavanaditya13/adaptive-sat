@@ -1,12 +1,14 @@
 """Shared fixtures for backend tests.
 
-Most existing tests in this package call service/endpoint functions directly
-with mocked repositories (see test_auth_regression.py) and never touch a real
-database. That's fine for auth plumbing, but the core practice -> scoring ->
-recommendation pipeline (see practice_service.py, skill_scoring_service.py,
-recommendation_service.py) shares persisted state across those three files,
-so a mocked test can't catch a break in how one of them reads what another
-wrote -- only a real database can.
+Most tests under tests/api/ and tests/services/ call service/endpoint
+functions directly with mocked repositories (see tests/api/test_auth.py) and
+never touch a real database. That's fine for auth plumbing, but the core
+practice -> scoring -> recommendation pipeline (see practice_service.py,
+skill_scoring_service.py, recommendation_service.py) shares persisted state
+across those three files, so a mocked test can't catch a break in how one of
+them reads what another wrote -- only a real database can. Tests under
+tests/repositories/ and tests/integration/ use a real Postgres for the same
+reason.
 
 This module points DATABASE_URL/SYNC_DATABASE_URL at a dedicated
 `adaptive_sat_test` database (never the dev database) unless the environment
@@ -30,16 +32,18 @@ os.environ.setdefault("SYNC_DATABASE_URL", _DEFAULT_TEST_SYNC_DATABASE_URL)
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("ENVIRONMENT", "test")
 
+import uuid  # noqa: E402
 from urllib.parse import urlsplit, urlunsplit  # noqa: E402
 
 import psycopg2  # noqa: E402
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
-from sqlalchemy import text  # noqa: E402
+from sqlalchemy import delete, text  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
 from app.core.database import SessionLocal  # noqa: E402
 from app.core.migrations import run_pending_migrations  # noqa: E402
+from app.models.user import User  # noqa: E402
 
 
 def _target_sync_url() -> str:
@@ -110,3 +114,55 @@ async def _reset_student_state(_skip_without_postgres: None) -> None:
             )
         )
         await session.commit()
+
+
+@pytest_asyncio.fixture
+async def cleanup_after(_skip_without_postgres: None):
+    """For tests that create ad-hoc Topic rows (Question/Attempt cascade off
+    Topic via ondelete="CASCADE") outside the per-student truncate above --
+    Topic/Question are deliberately never truncated (see
+    _reset_student_state's docstring), since the seed data and other tests'
+    get-or-create fixtures need them to persist. A test creating its own
+    scratch Topic instead of reusing seed data must register it here so it
+    doesn't accumulate forever and dilute practice_service's random
+    question draws for OTHER tests (mode="section" pulls a random sample of
+    every Question row in that section, seed data included).
+
+    Usage: append `(Topic, topic.id)` after creating+flushing the topic.
+    """
+    created: list[tuple[type, int]] = []
+    yield created
+
+    if not created:
+        return
+
+    # A Core-level DELETE, not session.get() + session.delete(): the latter
+    # goes through the ORM's own cascade handling, which -- absent
+    # passive_deletes=True on every relationship in the chain -- tries to
+    # null out child FKs itself instead of deferring to the DB's
+    # ondelete="CASCADE", and fails on the NOT NULL columns here.
+    async with SessionLocal() as session:
+        for model_cls, obj_id in created:
+            await session.execute(delete(model_cls).where(model_cls.id == obj_id))
+        await session.commit()
+
+
+@pytest_asyncio.fixture
+async def student(_reset_student_state: None) -> User:
+    """A persisted student User row for DB-backed tests.
+
+    Shared here rather than redefined per test file (repositories/,
+    services/, integration/ all need one) -- see the "no duplicated query
+    patterns" backend rule, which applies just as much to test fixtures.
+    """
+    async with SessionLocal() as session:
+        user = User(
+            email=f"test-student-{uuid.uuid4().hex}@example.com",
+            full_name="Test Student",
+            role="student",
+            is_active=True,
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        return user

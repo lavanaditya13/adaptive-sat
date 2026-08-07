@@ -10,11 +10,15 @@ practice_service / skill_scoring_service / recommendation_service that
 breaks how it reads or writes shared state is actually caught. See
 conftest.py for how the test database is provisioned; these tests skip
 cleanly if Postgres isn't reachable.
+
+Deliberately kept under tests/integration/ rather than tests/services/ —
+splitting it per-service would defeat its purpose, which is exercising the
+seam *between* services, not any one of them in isolation. Single-service
+behavior belongs in the matching tests/services/test_*.py file instead.
 """
 
 from __future__ import annotations
 
-import uuid
 from contextlib import asynccontextmanager
 
 import pytest
@@ -83,21 +87,6 @@ async def _get_or_create_question(session, prompt: str, topic_id: int) -> Questi
         session.add(question)
         await session.flush()
     return question
-
-
-@pytest_asyncio.fixture
-async def student(_reset_student_state: None) -> User:
-    async with SessionLocal() as session:
-        user = User(
-            email=f"regression-{uuid.uuid4().hex}@example.com",
-            full_name="Regression Student",
-            role="student",
-            is_active=True,
-        )
-        session.add(user)
-        await session.commit()
-        await session.refresh(user)
-        return user
 
 
 @pytest_asyncio.fixture
