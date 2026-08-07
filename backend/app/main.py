@@ -57,7 +57,7 @@ async def root():
     }
 
 
-@app.get("/_diag_db_check_temp")
+@app.get("/api/_diag_db_check_temp")
 async def _diag_db_check_temp():
     import os
     import psycopg2
