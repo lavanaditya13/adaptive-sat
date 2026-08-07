@@ -2,41 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ResultsPage } from './ResultsPage';
 import { useResultsStore } from '@/store/results-store';
 import { MOCK_COMPLETE_RESPONSE } from '@/mocks/mock-data';
-
-vi.mock('@/store/results-store', () => ({
-  useResultsStore: vi.fn(),
-}));
+import { queryKeys } from '@/constants/query-keys';
+import { BACK_TO_DASHBOARD_BUTTON, START_NEW_PRACTICE_BUTTON } from './ResultsPage.constants';
 
 const navigateMock = vi.fn();
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return { ...actual, useNavigate: () => navigateMock };
 });
-
-function renderPage() {
-  return render(
-    <MemoryRouter>
-      <ResultsPage />
-    </MemoryRouter>
-  );
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ResultsPage } from './ResultsPage';
-import { useResultsStore } from '@/store/results-store';
-import { queryKeys } from '@/constants/query-keys';
-import { BACK_TO_DASHBOARD_BUTTON, START_NEW_PRACTICE_BUTTON } from './ResultsPage.constants';
-import type { CompleteResponse } from '@/types/api';
-
-const MOCK_COMPLETE_RESPONSE: CompleteResponse = {
-  status: 'completed',
-  score: { correct: 4, incorrect: 1, total: 5, percentage: 80 },
-  average_confidence: 4,
-  question_breakdown: [],
-  section: 'math',
-  section_display_name: 'Math',
-};
 
 function renderResultsPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -56,16 +33,13 @@ function renderResultsPage() {
 describe('ResultsPage', () => {
   beforeEach(() => {
     navigateMock.mockReset();
-    vi.mocked(useResultsStore).mockReset();
+    useResultsStore.getState().clearResults();
   });
 
   it('shows an empty state with a link back to the dashboard when there is no saved result', async () => {
-    vi.mocked(useResultsStore).mockImplementation((selector) =>
-      selector({ latestResult: null, setLatestResult: vi.fn(), clearResults: vi.fn() })
-    );
     const user = userEvent.setup();
 
-    renderPage();
+    renderResultsPage();
 
     expect(screen.getByText('No Recent Results')).toBeInTheDocument();
 
@@ -74,11 +48,9 @@ describe('ResultsPage', () => {
   });
 
   it('renders the score summary and question breakdown for a saved result', () => {
-    vi.mocked(useResultsStore).mockImplementation((selector) =>
-      selector({ latestResult: MOCK_COMPLETE_RESPONSE, setLatestResult: vi.fn(), clearResults: vi.fn() })
-    );
+    useResultsStore.getState().setLatestResult(MOCK_COMPLETE_RESPONSE);
 
-    renderPage();
+    renderResultsPage();
 
     expect(screen.queryByText('No Recent Results')).not.toBeInTheDocument();
     expect(screen.getByText(/2\/3/)).toBeInTheDocument();
@@ -87,7 +59,6 @@ describe('ResultsPage', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /back to dashboard/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /practice again/i })).toBeInTheDocument();
-    useResultsStore.getState().clearResults();
   });
 
   it('invalidates the dashboard query cache when clicking "Back to Dashboard"', async () => {
