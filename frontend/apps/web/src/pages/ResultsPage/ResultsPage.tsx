@@ -23,16 +23,17 @@ export function ResultsPage() {
   const navigate = useNavigate();
   const latestResult = useResultsStore((state) => state.latestResult);
 
+  const handleBackToDashboard = () => {
+    navigate(ROUTES.DASHBOARD);
+  };
+
   if (!latestResult) {
     return (
       <div className={EMPTY_CONTAINER_STYLES}>
         <Card className={EMPTY_CARD_STYLES}>
           <h2 className="text-xl font-semibold">{EMPTY_TITLE}</h2>
           <p className="text-sm text-muted-foreground">{EMPTY_DESCRIPTION}</p>
-          <Button
-            className={CTA_BUTTON_STYLES}
-            onClick={() => navigate(ROUTES.DASHBOARD)}
-          >
+          <Button className={CTA_BUTTON_STYLES} onClick={handleBackToDashboard}>
             {BACK_TO_DASHBOARD_BUTTON}
           </Button>
         </Card>
@@ -50,16 +51,13 @@ export function ResultsPage() {
       />
 
       <div className={CTA_CONTAINER_STYLES}>
-        <Button
-          className={CTA_BUTTON_STYLES}
-          onClick={() => navigate(ROUTES.DASHBOARD)}
-        >
+        <Button className={CTA_BUTTON_STYLES} onClick={handleBackToDashboard}>
           {BACK_TO_DASHBOARD_BUTTON}
         </Button>
         <Button
           variant="outline"
           className={CTA_BUTTON_STYLES}
-          onClick={() => navigate(ROUTES.DASHBOARD)}
+          onClick={handleBackToDashboard}
         >
           {START_NEW_PRACTICE_BUTTON}
         </Button>
