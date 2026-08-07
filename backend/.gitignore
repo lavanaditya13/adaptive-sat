@@ -38,6 +38,7 @@ env.bak/
 venv.bak/
 
 # Testing / coverage
+.coverage
 htmlcov/
 .tox/
 .nosetests
