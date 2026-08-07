@@ -1,9 +1,11 @@
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@workspace/ui/components/button';
 import { Card } from '@workspace/ui/components/card';
 import { ScoreSummary } from '@/components/practice/ScoreSummary/ScoreSummary';
 import { QuestionBreakdownList } from '@/components/practice/QuestionBreakdownList/QuestionBreakdownList';
 import { useResultsStore } from '@/store/results-store';
+import { queryKeys } from '@/constants/query-keys';
 import { ROUTES } from '@/constants/routes';
 import {
   EMPTY_TITLE,
@@ -21,9 +23,14 @@ import {
 
 export function ResultsPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const latestResult = useResultsStore((state) => state.latestResult);
 
+  // Belt-and-suspenders alongside the invalidation in PracticePage: this
+  // page can also be reached via a refresh or deep link that skipped that
+  // completion callback, so the dashboard cache must be invalidated here too.
   const handleBackToDashboard = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
     navigate(ROUTES.DASHBOARD);
   };
 
