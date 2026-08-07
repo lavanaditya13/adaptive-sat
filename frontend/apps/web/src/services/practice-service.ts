@@ -6,6 +6,7 @@ import type {
   SectionContextResponse,
   StartPracticeResponse,
   AnswerResponse,
+  AbandonResponse,
   QuestionResponse,
   CompleteResponse,
 } from '@/types/api';
@@ -49,6 +50,20 @@ export async function startPractice(
 
     console.warn('API startPractice failed, returning mock fallback response:', error);
     return mockHandlers.startPractice();
+  }
+}
+
+export async function abandonPractice(): Promise<AbandonResponse> {
+  try {
+    const response = await apiClient.post<AbandonResponse>(API.PRACTICE.ABANDON);
+    return response.data;
+  } catch (error) {
+    if (!shouldUseMockFallback(error)) {
+      throw error;
+    }
+
+    console.warn('API abandonPractice failed, returning mock fallback response:', error);
+    return mockHandlers.abandonPractice();
   }
 }
 

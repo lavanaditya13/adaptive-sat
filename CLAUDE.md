@@ -68,7 +68,7 @@ Note: `requirements.txt` at `backend/requirements.txt` is a poetry export kept i
 
 ### Running both together
 
-`./scripts/dev.sh [backend|frontend|all|stop]` (or `npm run dev:backend` / `dev:frontend` / `dev:all` / `dev:stop` from the repo root) starts either server alone or both together with combined logs streamed to one terminal; `all` is the default and Ctrl+C stops both cleanly. Backend mode uses `poetry run uvicorn` if `backend/.env` exists, otherwise falls back to the Docker-based `backend/scripts/start_backend.sh`.
+`./scripts/dev.sh [backend|frontend|all|stop] [--seed|--no-seed]` (or `npm run dev:backend` / `dev:frontend` / `dev:all` / `dev:stop` from the repo root) starts either server alone or both together with combined logs streamed to one terminal; `all` is the default and Ctrl+C stops both cleanly. Backend mode uses `poetry run uvicorn` if `backend/.env` exists, otherwise falls back to the Docker-based `backend/scripts/start_backend.sh`. Either path runs `alembic upgrade head` and then the idempotent question seed (`backend/scripts/seed_sat_questions.py`) before the server starts — safe to run on every invocation, since migrations no-op once current and the seed script skips rows it already inserted. Pass `--no-seed` to skip just the question seed (migrations still run).
 
 ## Architecture
 

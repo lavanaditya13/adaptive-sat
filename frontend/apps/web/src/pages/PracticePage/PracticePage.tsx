@@ -1,8 +1,9 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { Button } from '@workspace/ui/components/button';
-import { Alert, AlertDescription } from '@workspace/ui/components/alert';
+import { Alert, AlertTitle, AlertDescription } from '@workspace/ui/components/alert';
 import { Skeleton } from '@workspace/ui/components/skeleton';
 import {
   Dialog,
@@ -23,6 +24,7 @@ import {
   completePractice,
 } from '@/services/practice-service';
 import { useNavigationGuard } from '@/hooks/use-navigation-guard';
+import { queryKeys } from '@/constants/query-keys';
 import { ROUTES } from '@/constants/routes';
 import type { ApiErrorResponse } from '@/types/api';
 import {
@@ -39,6 +41,9 @@ import {
   EXIT_DIALOG_CONFIRM,
   EXIT_DIALOG_CANCEL,
   ERROR_SAVING_ANSWER,
+  RESUME_ERROR_TITLE,
+  RESUME_ERROR_DESCRIPTION,
+  RESUME_RETRY_LABEL,
 } from './PracticePage.constants';
 import {
   PAGE_STYLES,
@@ -53,10 +58,13 @@ import {
   LOADING_CONTAINER_STYLES,
   SKELETON_BAR_STYLES,
   SKELETON_CARD_STYLES,
+  RESUME_ERROR_CONTAINER_STYLES,
+  RESUME_RETRY_BUTTON_STYLES,
 } from './PracticePage.styles';
 
 export function PracticePage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const {
     currentQuestion,
@@ -80,6 +88,7 @@ export function PracticePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [timeSpent, setTimeSpent] = useState(0);
+  const [resumeError, setResumeError] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasFetchedInitialQuestion = useRef(false);
@@ -111,28 +120,46 @@ export function PracticePage() {
     };
   }, [currentQuestion?.question_id, isReviewing]);
 
-  // Initial load check — guarded by a ref (not derived from currentQuestion)
-  // so that resetSession() nulling currentQuestion out after a completed
-  // session doesn't re-trigger a fetch against a session that no longer
-  // exists, racing with the navigate-to-results that just happened.
+  // Loads (or resumes) the active session's current question. Only a
+  // confirmed "no active session" response (404) is treated as a reason to
+  // leave — a page refresh, a flaky connection, or a browser coming back
+  // from sleep must never bounce the student off an in-progress test, since
+  // the session itself lives on the server and is still there.
+  const loadCurrentQuestion = useCallback(() => {
+    setIsLoading(true);
+    setResumeError(false);
+
+    getCurrentQuestion()
+      .then((data) => {
+        setSessionData(data.question, data.current_position, data.total_questions);
+      })
+      .catch((err: unknown) => {
+        const confirmedNoActiveSession =
+          axios.isAxiosError<ApiErrorResponse>(err) && err.response?.status === 404;
+
+        if (confirmedNoActiveSession) {
+          navigate(ROUTES.DASHBOARD);
+        } else {
+          setResumeError(true);
+        }
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [setSessionData, navigate]);
+
+  // Guarded by a ref (not derived from currentQuestion) so that
+  // resetSession() nulling currentQuestion out after a completed session
+  // doesn't re-trigger a fetch against a session that no longer exists,
+  // racing with the navigate-to-results that just happened.
   useEffect(() => {
     if (currentQuestion || hasFetchedInitialQuestion.current) {
       return;
     }
 
     hasFetchedInitialQuestion.current = true;
-    setIsLoading(true);
-    getCurrentQuestion()
-      .then((data) => {
-        setSessionData(data.question, data.current_position, data.total_questions);
-      })
-      .catch(() => {
-        navigate(ROUTES.DASHBOARD);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }, [currentQuestion, setSessionData, navigate]);
+    loadCurrentQuestion();
+  }, [currentQuestion, loadCurrentQuestion]);
 
   const handleSubmit = async () => {
     if (!selectedAnswer || isSubmitting || !currentQuestion) return;
@@ -167,6 +194,10 @@ export function PracticePage() {
         try {
           const completeData = await completePractice();
           setLatestResult(completeData);
+          // Completing a session changes dashboard metrics (questions answered,
+          // sessions completed, estimated score) — invalidate so the dashboard
+          // refetches instead of serving its pre-session cache on next visit.
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
           resetSession();
           navigate(ROUTES.RESULTS);
         } catch {
@@ -221,6 +252,28 @@ export function PracticePage() {
         <Skeleton className={SKELETON_BAR_STYLES} />
         <Skeleton className={SKELETON_CARD_STYLES} />
         <Skeleton className={SKELETON_BAR_STYLES} />
+      </div>
+    );
+  }
+
+  if (resumeError) {
+    return (
+      <div className={RESUME_ERROR_CONTAINER_STYLES}>
+        <Alert variant="destructive">
+          <AlertTitle>{RESUME_ERROR_TITLE}</AlertTitle>
+          <AlertDescription>
+            {RESUME_ERROR_DESCRIPTION}
+            <div>
+              <Button
+                size="sm"
+                className={RESUME_RETRY_BUTTON_STYLES}
+                onClick={loadCurrentQuestion}
+              >
+                {RESUME_RETRY_LABEL}
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }

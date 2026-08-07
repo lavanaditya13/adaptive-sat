@@ -6,3 +6,4 @@ export const BACK_LINK_STYLES = 'text-sm text-muted-foreground hover:text-foregr
 export const TOPICS_LIST_STYLES = 'mt-4 flex flex-col gap-2';
 export const SKELETON_ROW_STYLES = 'h-16 w-full';
 export const SKELETON_LIST_STYLES = 'mt-2 flex flex-col gap-2';
+export const CONFLICT_ACTIONS_STYLES = 'mt-3 flex gap-2';
