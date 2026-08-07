@@ -55,29 +55,3 @@ async def root():
         "message": f"Welcome to the {settings.PROJECT_NAME} API.",
         "documentation": f"{settings.API_V1_STR}/docs"
     }
-
-
-@app.get("/api/_diag_db_check_temp")
-async def _diag_db_check_temp():
-    import os
-    import psycopg2
-
-    results = {}
-    for name in (
-        "DATABASE_URL",
-        "ADDED_DATABASE_URL",
-        "DATABASE_URL_UNPOOLED",
-        "ADDED_DATABASE_URL_UNPOOLED",
-    ):
-        val = os.environ.get(name)
-        if not val:
-            results[name] = "unset"
-            continue
-        sync_val = val.replace("postgresql+asyncpg://", "postgresql://")
-        try:
-            conn = psycopg2.connect(sync_val, connect_timeout=5)
-            conn.close()
-            results[name] = "ok"
-        except Exception as exc:
-            results[name] = f"failed: {type(exc).__name__}"
-    return results
