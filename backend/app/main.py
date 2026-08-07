@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,12 +8,23 @@ from app.core.config import settings
 from app.api.v1.router import api_router
 from app.core.migrations import run_pending_migrations
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Alembic's env.py calls asyncio.run() internally, which can't run
     # inside this already-running event loop — offload to a thread.
-    await asyncio.to_thread(run_pending_migrations)
+    #
+    # Migration failure (e.g. a stale/misconfigured DATABASE_URL) must not
+    # take the whole app down: Starlette aborts startup entirely if lifespan
+    # raises, which 500s every route on every request until someone
+    # notices — far worse than booting with a possibly-stale schema and
+    # letting individual DB-touching endpoints fail normally.
+    try:
+        await asyncio.to_thread(run_pending_migrations)
+    except Exception:
+        logger.exception("Startup migrations failed; continuing without them.")
     yield
 
 
@@ -43,3 +55,29 @@ async def root():
         "message": f"Welcome to the {settings.PROJECT_NAME} API.",
         "documentation": f"{settings.API_V1_STR}/docs"
     }
+
+
+@app.get("/_diag_db_check_temp")
+async def _diag_db_check_temp():
+    import os
+    import psycopg2
+
+    results = {}
+    for name in (
+        "DATABASE_URL",
+        "ADDED_DATABASE_URL",
+        "DATABASE_URL_UNPOOLED",
+        "ADDED_DATABASE_URL_UNPOOLED",
+    ):
+        val = os.environ.get(name)
+        if not val:
+            results[name] = "unset"
+            continue
+        sync_val = val.replace("postgresql+asyncpg://", "postgresql://")
+        try:
+            conn = psycopg2.connect(sync_val, connect_timeout=5)
+            conn.close()
+            results[name] = "ok"
+        except Exception as exc:
+            results[name] = f"failed: {type(exc).__name__}"
+    return results
