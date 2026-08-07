@@ -1,9 +1,11 @@
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@workspace/ui/components/button';
 import { Card } from '@workspace/ui/components/card';
 import { ScoreSummary } from '@/components/practice/ScoreSummary/ScoreSummary';
 import { QuestionBreakdownList } from '@/components/practice/QuestionBreakdownList/QuestionBreakdownList';
 import { useResultsStore } from '@/store/results-store';
+import { queryKeys } from '@/constants/query-keys';
 import { ROUTES } from '@/constants/routes';
 import {
   EMPTY_TITLE,
@@ -21,7 +23,16 @@ import {
 
 export function ResultsPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const latestResult = useResultsStore((state) => state.latestResult);
+
+  // Belt-and-suspenders alongside the invalidation in PracticePage: this
+  // page can also be reached via a refresh or deep link that skipped that
+  // completion callback, so the dashboard cache must be invalidated here too.
+  const handleBackToDashboard = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+    navigate(ROUTES.DASHBOARD);
+  };
 
   if (!latestResult) {
     return (
@@ -29,10 +40,7 @@ export function ResultsPage() {
         <Card className={EMPTY_CARD_STYLES}>
           <h2 className="text-xl font-semibold">{EMPTY_TITLE}</h2>
           <p className="text-sm text-muted-foreground">{EMPTY_DESCRIPTION}</p>
-          <Button
-            className={CTA_BUTTON_STYLES}
-            onClick={() => navigate(ROUTES.DASHBOARD)}
-          >
+          <Button className={CTA_BUTTON_STYLES} onClick={handleBackToDashboard}>
             {BACK_TO_DASHBOARD_BUTTON}
           </Button>
         </Card>
@@ -50,16 +58,13 @@ export function ResultsPage() {
       />
 
       <div className={CTA_CONTAINER_STYLES}>
-        <Button
-          className={CTA_BUTTON_STYLES}
-          onClick={() => navigate(ROUTES.DASHBOARD)}
-        >
+        <Button className={CTA_BUTTON_STYLES} onClick={handleBackToDashboard}>
           {BACK_TO_DASHBOARD_BUTTON}
         </Button>
         <Button
           variant="outline"
           className={CTA_BUTTON_STYLES}
-          onClick={() => navigate(ROUTES.DASHBOARD)}
+          onClick={handleBackToDashboard}
         >
           {START_NEW_PRACTICE_BUTTON}
         </Button>
