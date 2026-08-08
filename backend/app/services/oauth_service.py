@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 
 import requests
 from jose import ExpiredSignatureError, JWTError, jwt
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -193,19 +194,28 @@ async def _upsert_oauth_user(
             "OAuth provider did not return an email and no linked account exists."
         )
 
-    return await user_repository.create_user(
-        db,
-        obj_in=SimpleNamespace(
-            email=email,
-            password=None,
-            full_name=full_name,
-            role="student",
-            is_active=True,
-            email_verified=email_verified,
-            oauth_provider=provider,
-            oauth_id=provider_id,
-        ),
-    )
+    try:
+        return await user_repository.create_user(
+            db,
+            obj_in=SimpleNamespace(
+                email=email,
+                password=None,
+                full_name=full_name,
+                role="student",
+                is_active=True,
+                email_verified=email_verified,
+                oauth_provider=provider,
+                oauth_id=provider_id,
+            ),
+        )
+    except IntegrityError:
+        # Lost a race against a concurrent OAuth callback for the same
+        # provider identity (e.g. two tabs completing sign-in at once) — the
+        # partial unique index on users(oauth_provider, oauth_id) caught it.
+        await db.rollback()
+        raise OAuthProviderConflictError(
+            "This OAuth account is already linked to another user."
+        )
 
 
 async def _link_oauth_to_current_user(
@@ -242,11 +252,21 @@ async def _link_oauth_to_current_user(
     if full_name and not current_user.full_name:
         updates["full_name"] = full_name
 
-    return await user_repository.update(
-        db,
-        db_obj=current_user,
-        obj_in=updates,
-    )
+    try:
+        return await user_repository.update(
+            db,
+            db_obj=current_user,
+            obj_in=updates,
+        )
+    except IntegrityError:
+        # Lost a race against a concurrent link request for the same
+        # provider identity (e.g. two different users' link flows racing) —
+        # the partial unique index on users(oauth_provider, oauth_id) caught
+        # it, same as the signup path above.
+        await db.rollback()
+        raise OAuthProviderConflictError(
+            "This OAuth account is already linked to another user."
+        )
 
 
 async def complete_google_oauth(

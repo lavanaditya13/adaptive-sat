@@ -7,6 +7,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
+from app.core.constants import PRACTICE_SESSION_QUESTION_STATUS_ASSIGNED
 from app.core.database import Base
 
 if TYPE_CHECKING:
@@ -39,8 +40,8 @@ class PracticeSessionQuestion(Base):
     status: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        default="assigned",
-        server_default="assigned",
+        default=PRACTICE_SESSION_QUESTION_STATUS_ASSIGNED,
+        server_default=PRACTICE_SESSION_QUESTION_STATUS_ASSIGNED,
     )
 
     answered_at: Mapped[datetime | None] = mapped_column(

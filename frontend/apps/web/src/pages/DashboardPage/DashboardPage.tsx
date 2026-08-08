@@ -89,6 +89,8 @@ export function DashboardPage() {
   const handleLogout = async () => {
     try {
       await logout();
+    } catch {
+      // Log out locally regardless of whether the server-side call succeeded.
     } finally {
       clearUser();
       resetPracticeSession();
