@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { Button } from '@workspace/ui/components/button';
 import { Alert, AlertTitle, AlertDescription } from '@workspace/ui/components/alert';
@@ -24,6 +25,7 @@ import {
   updateAttempt,
 } from '@/services/practice-service';
 import { useNavigationGuard } from '@/hooks/use-navigation-guard';
+import { queryKeys } from '@/constants/query-keys';
 import { ROUTES } from '@/constants/routes';
 import type { ApiErrorResponse } from '@/types/api';
 import {
@@ -72,6 +74,7 @@ function formatTime(seconds: number): string {
 
 export function PracticePage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const {
     currentQuestion,
@@ -187,6 +190,10 @@ export function PracticePage() {
       try {
         const completeData = await completePractice();
         setLatestResult(completeData);
+        // Completing a session changes dashboard metrics (questions answered,
+        // sessions completed, estimated score) — invalidate so the dashboard
+        // refetches instead of serving its pre-session cache on next visit.
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
         resetSession();
         navigate(ROUTES.RESULTS);
       } catch {

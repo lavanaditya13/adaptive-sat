@@ -11,6 +11,17 @@ Adaptive SAT is an AI-powered SAT prep platform: students practice questions, th
 
 They still build independently (no shared build step), but ship from the same Vercel project/domain, so the deployed frontend talks to the backend via same-origin relative paths (see `constants/environment.ts` below) — no CORS, and every preview deployment automatically gets a matching frontend+backend pair on one URL.
 
+## Working agreements
+
+- **Branching**: never commit directly on `develop`/`main`. Before writing any code:
+  ```bash
+  git checkout develop && git pull && git checkout -b feature/ASAT-123-short-desc
+  ```
+  Branch name is `feature/[JIRA-KEY]-[one/two word description]` (real Jira key, e.g. `ASAT-123`, not a placeholder). Confirm the branch with `git branch --show-current` before making any edits — no automated hook enforces this, so check manually every time. When using Claude Code's EnterWorktree tool for isolated work, name the worktree after the same `feature/[JIRA-KEY]-[desc]` pattern (e.g. `EnterWorktree(name: "feature/ASAT-123-desc")`) — the tool still prefixes the branch with `worktree-`, but the ticket/description stays legible in the branch name.
+- **Tests**: every new/changed frontend component or page gets a colocated Vitest test file (`ComponentName.test.tsx` inside the component's own folder, React Testing Library) — see existing examples like `pages/SettingsPage/SettingsPage.test.tsx` and `components/auth/OAuthButtons/OAuthButtons.test.tsx`. New backend logic gets a matching `app/tests/test_*.py`.
+- **Docs and written output** (CLAUDE.md, PR descriptions, plans): token-efficient, imperative, minimal prose — write for AI/tool consumption, not narrative explanation.
+- **Decisions**: make reasonable calls upfront rather than presenting open-ended options when a default is clear. If something is genuinely ambiguous or consequential, flag it explicitly as an open question — never guess silently and move on.
+
 ## Commands
 
 ### Frontend (run from `frontend/`, or via root `package.json` which prefixes into `frontend/`)
@@ -92,11 +103,15 @@ Vercel deployment entrypoint is `backend/index.py` (re-exports `app.main.app`). 
 
 ### Frontend structure (`frontend/apps/web/src`)
 
+Enterprise-grade `src/` layout — top-level dirs are `components`, `pages`, `constants`, `services`, `store`, `types`, `providers`, `hooks`, `utils`, `context`, `mocks`, `test`. Don't scatter equivalent concerns outside these (e.g. no ad hoc `helpers/` or `lib/`).
+
 - `App.tsx` / `constants/routes.ts` — route table (`react-router-dom`); central `ROUTES` constant, not scattered path strings.
-- `pages/<PageName>/` — one directory per route, each with `.tsx` + `.constants.ts` + (usually) `.styles.ts`. `components/<domain>/<ComponentName>/` follows the same three-file convention (component, constants, styles) — mirror it for new components.
+- **Component authoring pattern**: every component/page lives in its own folder: `ComponentName.tsx` (logic/markup), `ComponentName.styles.ts` (Tailwind/cva variants), `ComponentName.constants.ts` (all UI copy/strings — no inline literals in the `.tsx`), `ComponentName.test.tsx` (Vitest + RTL, colocated), and a root `index.ts` barrel re-exporting the public surface. Applies under both `pages/<PageName>/` and `components/<domain>/<ComponentName>/`. Existing pre-barrel files are being migrated incrementally — don't block unrelated changes on backfilling barrels, but every new/touched component should conform.
 - `services/*.ts` — one file per backend resource (`auth-service`, `dashboard-service`, `practice-service`), all built on the shared `services/api-client.ts` (axios instance, `withCredentials: true` since auth uses a cookie, base URL from `constants/environment.ts`).
 - `store/*.ts` — Zustand stores, one per concern (`auth-store`, `practice-session-store`, `results-store`); no single global store.
+- `types/*.ts` — shared TypeScript types/interfaces not local to one component (e.g. `types/api.ts`).
 - `providers/query-provider.tsx` — TanStack Query provider wrapping the app; server state goes through React Query + the `services/` layer, not ad hoc fetches in components.
+- `context/` — React context providers for cross-cutting UI state that doesn't belong in a Zustand store (create as needed; currently unused — prefer `store/` unless the state is tightly scoped to a subtree).
 - `constants/api-endpoints.ts` / `query-keys.ts` — centralized endpoint paths and query-key factories; use these instead of inlining URLs or ad hoc key arrays.
 - `mocks/` — mock data/handlers, exported together from `mocks/index.ts`, for local development/testing against fixture data instead of a live backend.
 - `utils/validation-schemas.ts` — Zod schemas paired with `react-hook-form` via `@hookform/resolvers` for forms (`LoginForm`, `SignupForm`).
