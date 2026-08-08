@@ -1,4 +1,4 @@
-"""add practice product flow
+"""add practice session questions and flow
 
 Revision ID: cbb4b92ca9fe
 Revises: e78523a6497e

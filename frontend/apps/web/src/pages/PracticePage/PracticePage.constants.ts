@@ -5,6 +5,7 @@ export const NEXT_LABEL = 'Next →';
 export const NEXT_QUESTION_LABEL = 'Next Question →';
 export const FINISH_TEST_LABEL = 'Finish Test →';
 export const SUBMITTING_LABEL = 'Saving...';
+export const SKIP_LABEL = 'Skip';
 export const EXIT_BUTTON_TEXT = 'Exit Session';
 export const EXIT_DIALOG_TITLE = 'Abandon Practice Session?';
 export const EXIT_DIALOG_DESCRIPTION =

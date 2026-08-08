@@ -7,6 +7,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
+from app.core.constants import PRACTICE_SESSION_STATUS_IN_PROGRESS
 from app.core.database import Base
 
 if TYPE_CHECKING:
@@ -57,8 +58,8 @@ class PracticeSession(Base):
     status: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        default="in_progress",
-        server_default="in_progress",
+        default=PRACTICE_SESSION_STATUS_IN_PROGRESS,
+        server_default=PRACTICE_SESSION_STATUS_IN_PROGRESS,
     )
 
     created_at: Mapped[datetime] = mapped_column(

@@ -1,4 +1,4 @@
-"""add practice product flow
+"""noop placeholder (empty auto-generated revision, no schema changes)
 
 Revision ID: 0843c71159ef
 Revises: cbb4b92ca9fe
