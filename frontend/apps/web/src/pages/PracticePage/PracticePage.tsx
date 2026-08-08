@@ -21,6 +21,7 @@ import {
   getCurrentQuestion,
   submitAnswer,
   completePractice,
+  updateAttempt,
 } from '@/services/practice-service';
 import { useNavigationGuard } from '@/hooks/use-navigation-guard';
 import { ROUTES } from '@/constants/routes';
@@ -33,6 +34,7 @@ import {
   NEXT_QUESTION_LABEL,
   FINISH_TEST_LABEL,
   SUBMITTING_LABEL,
+  SKIP_LABEL,
   EXIT_BUTTON_TEXT,
   EXIT_DIALOG_TITLE,
   EXIT_DIALOG_DESCRIPTION,
@@ -48,10 +50,12 @@ import {
   CONTAINER_STYLES,
   HEADER_STYLES,
   QUESTION_COUNTER_STYLES,
+  TIMER_STYLES,
   CONTENT_STYLES,
   FOOTER_STYLES,
   PREVIOUS_BUTTON_STYLES,
   NEXT_BUTTON_STYLES,
+  SKIP_BUTTON_STYLES,
   EXIT_BUTTON_STYLES,
   LOADING_CONTAINER_STYLES,
   SKELETON_BAR_STYLES,
@@ -59,6 +63,12 @@ import {
   RESUME_ERROR_CONTAINER_STYLES,
   RESUME_RETRY_BUTTON_STYLES,
 } from './PracticePage.styles';
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
 
 export function PracticePage() {
   const navigate = useNavigate();
@@ -75,6 +85,7 @@ export function PracticePage() {
     setSelectedAnswer,
     setConfidenceLevel,
     pushAnsweredQuestion,
+    updateAnsweredQuestion,
     setReviewIndex,
     resetSession,
   } = usePracticeSessionStore();
@@ -158,6 +169,34 @@ export function PracticePage() {
     loadCurrentQuestion();
   }, [currentQuestion, loadCurrentQuestion]);
 
+  const advanceAfterSubmit = async (remainingQuestions: number) => {
+    if (remainingQuestions > 0) {
+      try {
+        const nextQuestionData = await getCurrentQuestion();
+        setSessionData(
+          nextQuestionData.question,
+          nextQuestionData.current_position,
+          nextQuestionData.total_questions
+        );
+      } catch {
+        setErrorMessage(ERROR_SAVING_ANSWER);
+      } finally {
+        setIsSubmitting(false);
+      }
+    } else {
+      try {
+        const completeData = await completePractice();
+        setLatestResult(completeData);
+        resetSession();
+        navigate(ROUTES.RESULTS);
+      } catch {
+        setErrorMessage(ERROR_SAVING_ANSWER);
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
+  };
+
   const handleSubmit = async () => {
     if (!selectedAnswer || isSubmitting || !currentQuestion) return;
 
@@ -172,35 +211,57 @@ export function PracticePage() {
         question: currentQuestion,
         selectedAnswer,
         confidenceLevel,
+        attemptId: response.attempt_id,
       });
 
-      if (response.remaining_questions > 0) {
-        try {
-          const nextQuestionData = await getCurrentQuestion();
-          setSessionData(
-            nextQuestionData.question,
-            nextQuestionData.current_position,
-            nextQuestionData.total_questions
-          );
-        } catch {
-          setErrorMessage(ERROR_SAVING_ANSWER);
-        } finally {
-          setIsSubmitting(false);
-        }
-      } else {
-        try {
-          const completeData = await completePractice();
-          setLatestResult(completeData);
-          resetSession();
-          navigate(ROUTES.RESULTS);
-        } catch {
-          setErrorMessage(ERROR_SAVING_ANSWER);
-        } finally {
-          setIsSubmitting(false);
-        }
-      }
+      await advanceAfterSubmit(response.remaining_questions);
     } catch (err: unknown) {
       setIsSubmitting(false);
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        setErrorMessage(err.response?.data?.detail || ERROR_SAVING_ANSWER);
+      } else {
+        setErrorMessage(ERROR_SAVING_ANSWER);
+      }
+    }
+  };
+
+  const handleSkip = async () => {
+    if (isSubmitting || !currentQuestion) return;
+
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    try {
+      const response = await submitAnswer(null, timeSpent, confidenceLevel);
+
+      pushAnsweredQuestion({
+        position: currentPosition,
+        question: currentQuestion,
+        selectedAnswer: null,
+        confidenceLevel,
+        attemptId: response.attempt_id,
+      });
+
+      await advanceAfterSubmit(response.remaining_questions);
+    } catch (err: unknown) {
+      setIsSubmitting(false);
+      if (axios.isAxiosError<ApiErrorResponse>(err)) {
+        setErrorMessage(err.response?.data?.detail || ERROR_SAVING_ANSWER);
+      } else {
+        setErrorMessage(ERROR_SAVING_ANSWER);
+      }
+    }
+  };
+
+  const handleReviewAnswerChange = async (newAnswer: string) => {
+    if (!reviewEntry || isSubmitting) return;
+
+    setErrorMessage(null);
+
+    try {
+      await updateAttempt(reviewEntry.attemptId, newAnswer);
+      updateAnsweredQuestion(reviewEntry.position, newAnswer);
+    } catch (err: unknown) {
       if (axios.isAxiosError<ApiErrorResponse>(err)) {
         setErrorMessage(err.response?.data?.detail || ERROR_SAVING_ANSWER);
       } else {
@@ -294,6 +355,9 @@ export function PracticePage() {
             {OF_TEXT}
             {totalQuestions}
           </span>
+          {!isReviewing && (
+            <span className={TIMER_STYLES}>{formatTime(timeSpent)}</span>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -314,8 +378,8 @@ export function PracticePage() {
           <QuestionCard
             question={displayedQuestion}
             selectedAnswer={displayedSelectedAnswer}
-            onSelectAnswer={setSelectedAnswer}
-            disabled={isReviewing || isSubmitting}
+            onSelectAnswer={isReviewing ? handleReviewAnswerChange : setSelectedAnswer}
+            disabled={isSubmitting}
           />
 
           <ConfidenceSelector
@@ -340,17 +404,27 @@ export function PracticePage() {
               {NEXT_LABEL}
             </Button>
           ) : (
-            <Button
-              className={NEXT_BUTTON_STYLES}
-              disabled={!selectedAnswer || isSubmitting}
-              onClick={handleSubmit}
-            >
-              {isSubmitting
-                ? SUBMITTING_LABEL
-                : isLastQuestion
-                  ? FINISH_TEST_LABEL
-                  : NEXT_QUESTION_LABEL}
-            </Button>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button
+                variant="ghost"
+                className={SKIP_BUTTON_STYLES}
+                disabled={isSubmitting}
+                onClick={handleSkip}
+              >
+                {SKIP_LABEL}
+              </Button>
+              <Button
+                className={NEXT_BUTTON_STYLES}
+                disabled={!selectedAnswer || isSubmitting}
+                onClick={handleSubmit}
+              >
+                {isSubmitting
+                  ? SUBMITTING_LABEL
+                  : isLastQuestion
+                    ? FINISH_TEST_LABEL
+                    : NEXT_QUESTION_LABEL}
+              </Button>
+            </div>
           )}
         </div>
       </div>

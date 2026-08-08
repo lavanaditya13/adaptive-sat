@@ -14,6 +14,8 @@ from app.schemas.practice import (
     SectionSelectionResponse,
     SubmitAnswerRequest,
     SubmitAnswerResponse,
+    UpdateAttemptRequest,
+    UpdateAttemptResponse,
 )
 from app.services.practice_service import (
     abandon_practice_session,
@@ -23,6 +25,7 @@ from app.services.practice_service import (
     set_selected_section,
     start_practice_session,
     submit_answer,
+    update_attempt_answer,
 )
 
 router = APIRouter()
@@ -86,3 +89,15 @@ async def complete_session(
     db: AsyncSession = Depends(get_db),
 ):
     return await complete_practice_session(db=db, student=current_user)
+
+
+@router.put("/attempts/{attempt_id}", response_model=UpdateAttemptResponse)
+async def update_attempt(
+    attempt_id: int,
+    request: UpdateAttemptRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await update_attempt_answer(
+        db=db, student=current_user, attempt_id=attempt_id, request=request
+    )

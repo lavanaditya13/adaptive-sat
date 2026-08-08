@@ -129,6 +129,16 @@ class SubmitAnswerResponse(BaseModel):
     saved: bool
     answered_position: int
     remaining_questions: int
+    attempt_id: int
+
+
+class UpdateAttemptRequest(BaseModel):
+    selected_answer: Optional[str] = None
+
+
+class UpdateAttemptResponse(BaseModel):
+    saved: bool
+    attempt_id: int
 
 
 class ScoreSummary(BaseModel):

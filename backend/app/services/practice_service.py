@@ -33,6 +33,8 @@ from app.schemas.practice import (
     ScoreSummary,
     SubmitAnswerRequest,
     SubmitAnswerResponse,
+    UpdateAttemptRequest,
+    UpdateAttemptResponse,
 )
 from app.services.recommendation_service import generate_study_plan_for_student
 from app.services.skill_scoring_service import classify_mistake_type, get_student_progress
@@ -375,10 +377,34 @@ async def start_practice_session(
                 Question.section == _section_code_for_id(selected_section_id)
             )
 
-    question_result = await db.execute(
-        question_query.order_by(func.random()).limit(question_count)
+    attempted_ids_sq = (
+        select(Attempt.question_id)
+        .join(PracticeSession, PracticeSession.id == Attempt.practice_session_id)
+        .where(
+            Attempt.student_id == student.id,
+            PracticeSession.status == "completed",
+        )
+        .scalar_subquery()
     )
-    questions = list(question_result.scalars().unique().all())
+
+    fresh_result = await db.execute(
+        question_query.where(Question.id.not_in(attempted_ids_sq))
+        .order_by(func.random())
+        .limit(question_count)
+    )
+    questions = list(fresh_result.scalars().unique().all())
+
+    if len(questions) < question_count:
+        already_picked_ids = [q.id for q in questions]
+        supplement_filter = (
+            [Question.id.not_in(already_picked_ids)] if already_picked_ids else []
+        )
+        fallback_result = await db.execute(
+            question_query.where(*supplement_filter)
+            .order_by(func.random())
+            .limit(question_count - len(questions))
+        )
+        questions.extend(list(fallback_result.scalars().unique().all()))
 
     if not questions:
         raise HTTPException(
@@ -588,6 +614,7 @@ async def submit_answer(
         saved=True,
         answered_position=session_question.position,
         remaining_questions=remaining_questions,
+        attempt_id=attempt.id,
     )
 
 
@@ -721,3 +748,47 @@ async def complete_practice_session(
         section=section_code,
         section_display_name=section_display_name,
     )
+
+
+async def update_attempt_answer(
+    db: AsyncSession,
+    student: User,
+    attempt_id: int,
+    request: UpdateAttemptRequest,
+) -> UpdateAttemptResponse:
+    result = await db.execute(
+        select(Attempt)
+        .join(PracticeSession, PracticeSession.id == Attempt.practice_session_id)
+        .where(
+            Attempt.id == attempt_id,
+            Attempt.student_id == student.id,
+            PracticeSession.status == "in_progress",
+        )
+    )
+    attempt = result.scalar_one_or_none()
+
+    if attempt is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Attempt not found or session is no longer in progress",
+        )
+
+    question = await db.get(Question, attempt.question_id)
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    if request.selected_answer is not None and request.selected_answer not in question.choices:
+        raise HTTPException(status_code=400, detail="Selected answer is invalid for this question")
+
+    attempt.selected_answer = request.selected_answer
+    attempt.is_correct = request.selected_answer == question.correct_answer
+    attempt.mistake_type = classify_mistake_type(
+        selected_answer=request.selected_answer,
+        is_correct=attempt.is_correct,
+        time_spent_seconds=attempt.time_spent_seconds,
+        confidence_level=attempt.confidence_level,
+    )
+
+    await db.commit()
+
+    return UpdateAttemptResponse(saved=True, attempt_id=attempt.id)
