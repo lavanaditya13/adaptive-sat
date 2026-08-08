@@ -399,7 +399,7 @@ async def start_practice_session(
         .join(PracticeSession, PracticeSession.id == Attempt.practice_session_id)
         .where(
             Attempt.student_id == student.id,
-            PracticeSession.status == "completed",
+            PracticeSession.status == PRACTICE_SESSION_STATUS_COMPLETED,
         )
         .scalar_subquery()
     )
@@ -805,7 +805,7 @@ async def update_attempt_answer(
         .where(
             Attempt.id == attempt_id,
             Attempt.student_id == student.id,
-            PracticeSession.status == "in_progress",
+            PracticeSession.status == PRACTICE_SESSION_STATUS_IN_PROGRESS,
         )
     )
     attempt = result.scalar_one_or_none()
