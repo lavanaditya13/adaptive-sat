@@ -102,7 +102,8 @@ async def test_stale_zero_attempt_session_does_not_block_new_start(monkeypatch):
             _FakeResult(stale_session),  # existing active-session check
             _FakeResult(None),  # _get_latest_attempt_at — zero attempts
             _FakeResult(1),  # selected_section_id
-            _FakeResult([question]),  # question_query results
+            _FakeResult([question]),  # fresh question query (dedup filter applied)
+            _FakeResult([]),  # fallback query (supplement when pool exhausted)
         ]
     )
     monkeypatch.setattr(

@@ -78,7 +78,12 @@ describe('PracticePage', () => {
     vi.mocked(getCurrentQuestion)
       .mockResolvedValueOnce({ question: MOCK_QUESTIONS[0], current_position: 1, total_questions: 2 })
       .mockResolvedValueOnce({ question: MOCK_QUESTIONS[1], current_position: 2, total_questions: 2 });
-    vi.mocked(submitAnswer).mockResolvedValue({ saved: true, answered_position: 1, remaining_questions: 1 });
+    vi.mocked(submitAnswer).mockResolvedValue({
+      saved: true,
+      answered_position: 1,
+      remaining_questions: 1,
+      attempt_id: 1,
+    });
     const user = userEvent.setup();
 
     renderPracticePage();
@@ -103,7 +108,12 @@ describe('PracticePage', () => {
       current_position: 2,
       total_questions: 2,
     });
-    vi.mocked(submitAnswer).mockResolvedValue({ saved: true, answered_position: 2, remaining_questions: 0 });
+    vi.mocked(submitAnswer).mockResolvedValue({
+      saved: true,
+      answered_position: 2,
+      remaining_questions: 0,
+      attempt_id: 2,
+    });
     vi.mocked(completePractice).mockResolvedValue(MOCK_COMPLETE_RESPONSE);
     const user = userEvent.setup();
 
@@ -163,6 +173,7 @@ describe('PracticePage', () => {
       saved: true,
       answered_position: 1,
       remaining_questions: 0,
+      attempt_id: 1,
     });
     vi.mocked(completePractice).mockResolvedValue(MOCK_COMPLETE_RESPONSE);
 
