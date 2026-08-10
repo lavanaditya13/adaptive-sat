@@ -7,7 +7,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 # insert (not append): must win over an editable install of this same
@@ -18,10 +19,56 @@ sys.path.insert(0, str(ROOT_DIR))
 
 from app.core.database import get_db
 from app.models.question import Question
+from app.models.section import Section
 from app.models.topic import Topic
+from app.services.practice_service import SECTION_CODES, SECTION_DISPLAY_NAMES
 
 
 DEFAULT_SEED_FILE = ROOT_DIR / "data" / "sample_sat_questions_seed.jsonl"
+
+
+async def seed_sections(db: AsyncSession) -> tuple[int, int]:
+    """
+    Seed the constant `sections` rows (id -> code, from SECTION_CODES).
+
+    Sections aren't in the JSONL seed file -- they're fixed reference data
+    practice_service.py keys off of directly (SECTION_CODES maps a numeric
+    section_id to a code without ever querying this table), so the ids must
+    match exactly. A schema-only branch fork (e.g. a fresh preview database)
+    copies table structure but no rows, which leaves `sections` empty and
+    section selection broken until this is seeded -- unlike topics/questions,
+    there's no separate data file to re-run, so this always runs as part of
+    this script instead.
+    """
+    created = 0
+    skipped = 0
+
+    for section_id, code in SECTION_CODES.items():
+        existing = await db.get(Section, section_id)
+
+        if existing is not None:
+            skipped += 1
+            continue
+
+        db.add(
+            Section(
+                id=section_id,
+                name=code,
+                display_name=SECTION_DISPLAY_NAMES[code],
+            )
+        )
+        created += 1
+
+    await db.flush()
+
+    if created:
+        await db.execute(
+            text("SELECT setval('sections_id_seq', (SELECT MAX(id) FROM sections))")
+        )
+
+    await db.commit()
+
+    return created, skipped
 
 
 def parse_args() -> argparse.Namespace:
@@ -95,6 +142,8 @@ async def seed_sat_questions(seed_file: Path, commit_every: int) -> None:
     topic_cache: dict[str, Topic] = {}
 
     async for db in get_db():
+        created_sections, skipped_sections = await seed_sections(db)
+
         with seed_file.open("r", encoding="utf-8") as file:
             for line_number, raw_line in enumerate(file, start=1):
                 line = raw_line.strip()
@@ -173,6 +222,8 @@ async def seed_sat_questions(seed_file: Path, commit_every: int) -> None:
 
     print("SAT question seed complete.")
     print(f"Seed file: {seed_file}")
+    print(f"Sections created: {created_sections}")
+    print(f"Sections skipped: {skipped_sections}")
     print(f"Lines processed: {processed_lines}")
     print(f"Topics created: {created_topics}")
     print(f"Topics skipped: {skipped_topics}")

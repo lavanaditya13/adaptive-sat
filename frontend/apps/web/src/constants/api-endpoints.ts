@@ -19,6 +19,7 @@ export const API = {
     ANSWER: '/api/v1/practice/answer',
     QUESTION: '/api/v1/practice/question',
     COMPLETE: '/api/v1/practice/complete',
+    ATTEMPT_UPDATE: (id: number) => `/api/v1/practice/attempts/${id}`,
   },
   SETTINGS: {
     CONNECTED_PROVIDERS: '/api/v1/settings/connected-providers',

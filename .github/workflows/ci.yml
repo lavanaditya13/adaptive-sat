@@ -12,6 +12,27 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: adaptive_sat_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Matches the postgres service above. app/tests/conftest.py points
+      # here by default too, but CI sets it explicitly since the service
+      # container's user/password won't match every dev machine's local
+      # Postgres (see conftest.py's docstring).
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/adaptive_sat_test
+      SYNC_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/adaptive_sat_test
     steps:
       - uses: actions/checkout@v4
 
@@ -57,8 +78,16 @@ jobs:
             exit 1
           fi
 
+      # app/tests/conftest.py creates the test database (if needed) and
+      # applies Alembic migrations against it automatically, so no separate
+      # migration step is needed here -- it also means this catches a
+      # migration that fails to apply cleanly, not just failing test logic.
       - name: Run tests
-        run: poetry run pytest
+        run: >-
+          poetry run pytest
+          --cov=app
+          --cov-report=term-missing
+          --cov-fail-under=75
 
   frontend:
     name: Frontend
@@ -86,8 +115,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm run test
+      - name: Test with coverage
+        run: npm run test:coverage
 
       - name: Build
         run: npm run build

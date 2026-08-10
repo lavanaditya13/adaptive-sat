@@ -1,31 +1,25 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code in this repository.
 
 ## Project overview
 
-Adaptive SAT is an AI-powered SAT prep platform: students practice questions, the backend scores mistakes and derives weak topics, and a study plan / dashboard is generated from that data. Two halves live in one repo and deploy together as a single Vercel project (root `vercel.json`):
+Adaptive SAT: students practice questions, the backend scores mistakes and derives weak topics, and a study plan / dashboard is generated from that data.
 
-- `backend/` — FastAPI + SQLAlchemy 2.0 (async) + Alembic + PostgreSQL, deployed as a serverless function at `/api/*`.
-- `frontend/` — npm-workspaces monorepo (Turborepo) containing a Vite + React 19 SPA (`apps/web`) and a shared shadcn/ui component package (`packages/ui`), deployed as the static site serving everything else.
+- `backend/` — FastAPI + SQLAlchemy 2.0 (async) + Alembic + PostgreSQL, deployed as a serverless function at `/api/*`. Commands, request-flow architecture, and the practice domain model: `.claude/rules/backend.md`.
+- `frontend/` — npm-workspaces/Turborepo monorepo: Vite + React 19 SPA (`apps/web`) + shared shadcn/ui package (`packages/ui`), deployed as the static site serving everything else. Commands and source structure: `.claude/rules/frontend.md`.
 
-They still build independently (no shared build step), but ship from the same Vercel project/domain, so the deployed frontend talks to the backend via same-origin relative paths (see `constants/environment.ts` below) — no CORS, and every preview deployment automatically gets a matching frontend+backend pair on one URL.
+Both halves deploy together as one Vercel project (root `vercel.json`) on one domain, so the deployed frontend calls the backend via same-origin relative paths — no CORS, and every branch push gets one preview URL with a matched frontend+backend pair.
 
-## Commands
+## Commands — running both together
 
-### Frontend (run from `frontend/`, or via root `package.json` which prefixes into `frontend/`)
+`./scripts/dev.sh [backend|frontend|all|stop] [--seed|--no-seed]` (or `npm run dev:backend` / `dev:frontend` / `dev:all` / `dev:stop` from the repo root) starts either server alone or both together with combined logs in one terminal; `all` is the default, Ctrl+C stops both. Backend mode uses `poetry run uvicorn` if `backend/.env` exists, else falls back to the Docker-based `backend/scripts/start_backend.sh`. Either path runs `alembic upgrade head` then the idempotent question seed before the server starts — safe on every invocation. `--no-seed` skips just the seed (migrations still run).
 
-```bash
-npm run dev         # turbo dev  — starts apps/web on Vite (default http://localhost:5173)
-npm run build        # turbo build
-npm run lint          # turbo lint (eslint)
-npm run typecheck     # turbo typecheck (tsc --noEmit)
-npm run format        # turbo format (prettier, with prettier-plugin-tailwindcss)
-```
+## Hard rules
 
-These fan out through Turborepo to every workspace (`apps/web`, `packages/ui`). To target just `apps/web`, `cd frontend/apps/web` and run the same script names directly (e.g. `npm run dev`, `npm run build` which runs `tsc -b && vite build`).
+- Never rename `backend/poetry-project.toml` / `poetry-project.lock` back to `pyproject.toml` / `poetry.lock` — Vercel auto-detects Poetry projects by that name and that broke the backend deployment once already (commit `d96404c`). Use the local gitignored symlinks described in `.claude/rules/backend.md` for dev tooling instead.
 
-Add a new shadcn/ui component (places files in `packages/ui/src/components`, run from `frontend/`):
+## Deployment
 
 ```bash
 pnpm dlx shadcn@latest add button -c apps/web
@@ -105,3 +99,4 @@ Vercel deployment entrypoint is `backend/index.py` (re-exports `app.main.app`). 
 - `hooks/use-navigation-guard.ts` — guards in-progress practice sessions against accidental navigation/tab close (`beforeunload` + confirm-exit dialog); reuse this for any other flow where losing in-progress state should be confirmed.
 
 UI primitives (button, card, dialog, input, etc.) live in the separate `packages/ui` workspace and are imported as `@workspace/ui/components/*`; app-specific composite components live in `apps/web/src/components`. Path alias `@/` maps to `apps/web/src/`.
+Vercel entrypoint is `backend/index.py` (re-exports `app.main.app`). Root `vercel.json`: `@vercel/python` builds `backend/index.py` and routes `/api/*` to it; `@vercel/static-build` builds `frontend/apps/web` and serves everything else (SPA fallback to `index.html`).

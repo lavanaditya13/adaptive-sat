@@ -93,6 +93,12 @@ interface AnswerResponse {
   saved: boolean;
   answered_position: number;
   remaining_questions: number;
+  attempt_id: number;
+}
+
+interface UpdateAttemptResponse {
+  saved: boolean;
+  attempt_id: number;
 }
 
 interface AbandonResponse {
@@ -157,5 +163,6 @@ export type {
   QuestionResponse,
   QuestionBreakdownItem,
   CompleteResponse,
+  UpdateAttemptResponse,
   ApiErrorResponse,
 };
