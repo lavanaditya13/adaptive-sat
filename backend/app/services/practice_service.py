@@ -19,6 +19,8 @@ from app.models.topic import Topic
 from app.models.user import User
 from app.schemas.practice import (
     AdaptiveUnlockResponse,
+    DomainNodeResponse,
+    MasteryRuleResponse,
     PracticeAbandonResponse,
     PracticeCompleteResponse,
     PracticeQuestionResponse,
@@ -27,6 +29,7 @@ from app.schemas.practice import (
     QuestionBreakdownItem,
     SectionPracticeOption,
     SectionSelectionResponse,
+    SkillTreeResponse,
     TopicActionItem,
     UnlockRequirement,
     PublicQuestionResponse,
@@ -35,7 +38,13 @@ from app.schemas.practice import (
     SubmitAnswerResponse,
 )
 from app.services.recommendation_service import generate_study_plan_for_student
-from app.services.skill_scoring_service import classify_mistake_type, get_student_progress
+from app.services.skill_scoring_service import (
+    MASTERY_ACCURACY_PERCENT,
+    MASTERY_MIN_QUESTIONS,
+    classify_mistake_type,
+    get_section_skill_tree,
+    get_student_progress,
+)
 
 
 SECTION_CODES = {
@@ -193,6 +202,45 @@ async def set_selected_section(
     return SectionSelectionResponse(
         practice_options=practice_options,
         topics=topics,
+    )
+
+
+async def get_skill_tree(
+    db: AsyncSession,
+    student: User,
+    section: str | None = None,
+) -> SkillTreeResponse:
+    """Domain -> skill accuracy tree for one section, for the mastery view.
+
+    `section` is the section code ("math" / "reading_writing"); omitting it
+    falls back to whatever section the student last selected, so the client
+    doesn't have to track it separately from POST /context/section.
+    """
+    if section is None:
+        selected_section_id = await _get_selected_section_id(db=db, student_id=student.id)
+
+        if selected_section_id is None:
+            raise HTTPException(status_code=400, detail="No section selected")
+
+        section = _section_code_for_id(selected_section_id)
+
+    if section not in SECTION_DISPLAY_NAMES:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    domains = await get_section_skill_tree(
+        db=db,
+        student_id=student.id,
+        section_code=section,
+    )
+
+    return SkillTreeResponse(
+        section=section,
+        section_display_name=SECTION_DISPLAY_NAMES[section],
+        mastery_rule=MasteryRuleResponse(
+            accuracy=MASTERY_ACCURACY_PERCENT,
+            min_questions=MASTERY_MIN_QUESTIONS,
+        ),
+        domains=[DomainNodeResponse(**domain) for domain in domains],
     )
 
 

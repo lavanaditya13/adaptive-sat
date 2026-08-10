@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
 
 
 PracticeMode = Literal["adaptive", "topic", "section"]
@@ -122,7 +123,17 @@ class PracticeAbandonResponse(BaseModel):
 class SubmitAnswerRequest(BaseModel):
     selected_answer: Optional[str] = None
     time_spent_seconds: Optional[int] = Field(default=None, ge=0)
-    confidence_level: Optional[int] = Field(default=None, ge=1, le=5)
+    # The redesigned runner sends this as `confidence`; the original client
+    # sends `confidence_level`. Accept either so neither has to change in
+    # lockstep with the other. Stays optional — a client that sends no
+    # rating at all still submits successfully, and the attempt just has no
+    # confidence recorded.
+    confidence_level: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=5,
+        validation_alias=AliasChoices("confidence", "confidence_level"),
+    )
 
 
 class SubmitAnswerResponse(BaseModel):
@@ -165,3 +176,48 @@ class PracticeCompleteResponse(BaseModel):
     question_breakdown: list[QuestionBreakdownItem] = []
     section: Optional[str] = None
     section_display_name: Optional[str] = None
+
+
+class _SkillTreeNode(BaseModel):
+    """Base for the skill-tree payload. Unlike the rest of this module the
+    tree serializes as camelCase, because it feeds a mastery view whose
+    node shape (name / accuracy / questionsAttempted / mastered) is fixed
+    by the design and is rendered identically at both levels of the tree.
+    Populate-by-name keeps the service layer constructing them with normal
+    snake_case kwargs."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+class SkillNodeResponse(_SkillTreeNode):
+    name: str
+    accuracy: int
+    questions_attempted: int
+    questions_correct: int
+    mastered: bool
+
+
+class DomainNodeResponse(_SkillTreeNode):
+    name: str
+    # 1-based index of this domain within its section, ordered by name —
+    # the same identifier POST /practice/start takes as `topic_id`, not the
+    # underlying Topic primary key. Matches SectionSelectionResponse.topics.
+    topic_id: int
+    topic_code: str
+    accuracy: int
+    questions_attempted: int
+    questions_correct: int
+    mastered: bool
+    skills: list[SkillNodeResponse] = []
+
+
+class MasteryRuleResponse(_SkillTreeNode):
+    accuracy: int
+    min_questions: int
+
+
+class SkillTreeResponse(_SkillTreeNode):
+    section: str
+    section_display_name: str
+    mastery_rule: MasteryRuleResponse
+    domains: list[DomainNodeResponse] = []
