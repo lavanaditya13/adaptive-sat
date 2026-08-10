@@ -1,4 +1,4 @@
-import { PagePlaceholder } from '@/components/layout/PagePlaceholder/PagePlaceholder';
+import { PagePlaceholder } from '@/components/layout/PagePlaceholder';
 import { PAGE_DESCRIPTION, PAGE_TITLE } from './PracticeSubjectPage.constants';
 
 // Stub: subject picker. Route wiring is owned by the app-shell segment.

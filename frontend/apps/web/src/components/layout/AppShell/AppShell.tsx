@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { subscribeToMobileBreakpoint, useAppShellStore } from '@/store/app-shell-store';
-import { Header } from '@/components/layout/Header/Header';
-import { MobileProfileSheet } from '@/components/layout/MobileProfileSheet/MobileProfileSheet';
-import { MobileSidebarDrawer } from '@/components/layout/MobileSidebarDrawer/MobileSidebarDrawer';
-import { MobileTabBar } from '@/components/layout/MobileTabBar/MobileTabBar';
-import { Sidebar } from '@/components/layout/Sidebar/Sidebar';
-import { Toast } from '@/components/layout/Toast/Toast';
+import { Header } from '@/components/layout/Header';
+import { MobileProfileSheet } from '@/components/layout/MobileProfileSheet';
+import { MobileSidebarDrawer } from '@/components/layout/MobileSidebarDrawer';
+import { MobileTabBar } from '@/components/layout/MobileTabBar';
+import { Sidebar } from '@/components/layout/Sidebar';
+import { Toast } from '@/components/layout/Toast';
 import {
   CONTENT_BOTTOM_PADDING_DESKTOP,
   CONTENT_BOTTOM_PADDING_MOBILE,

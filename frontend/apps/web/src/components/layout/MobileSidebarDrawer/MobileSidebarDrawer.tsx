@@ -3,8 +3,8 @@ import { NAV_GROUPS } from '@/constants/navigation';
 import { useLogout } from '@/hooks/use-logout';
 import { useShellNavigation } from '@/hooks/use-shell-navigation';
 import { useAppShellStore } from '@/store/app-shell-store';
-import { BrandMark } from '@/components/layout/BrandMark/BrandMark';
-import { NavItemButton } from '@/components/layout/NavItemButton/NavItemButton';
+import { BrandMark } from '@/components/layout/BrandMark';
+import { NavItemButton } from '@/components/layout/NavItemButton';
 import { DRAWER_LABEL, LOGOUT_LABEL } from './MobileSidebarDrawer.constants';
 import {
   DRAWER_STYLES,

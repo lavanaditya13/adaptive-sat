@@ -1,6 +1,6 @@
 import { PanelLeft } from 'lucide-react';
 import { useAppShellStore } from '@/store/app-shell-store';
-import { Breadcrumbs } from '@/components/layout/Breadcrumbs/Breadcrumbs';
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { TOGGLE_SIDEBAR_LABEL } from './Header.constants';
 import { DIVIDER_STYLES, HEADER_STYLES, TOGGLE_BUTTON_STYLES } from './Header.styles';
 

@@ -1,4 +1,4 @@
-import { PagePlaceholder } from '@/components/layout/PagePlaceholder/PagePlaceholder';
+import { PagePlaceholder } from '@/components/layout/PagePlaceholder';
 import { PAGE_DESCRIPTION, PAGE_TITLE } from './QuestionsPage.constants';
 
 // Stub: session runner, replaces the legacy PracticePage. Set

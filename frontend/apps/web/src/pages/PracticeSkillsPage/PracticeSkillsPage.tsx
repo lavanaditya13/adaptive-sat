@@ -1,4 +1,4 @@
-import { PagePlaceholder } from '@/components/layout/PagePlaceholder/PagePlaceholder';
+import { PagePlaceholder } from '@/components/layout/PagePlaceholder';
 import { PAGE_DESCRIPTION, PAGE_TITLE } from './PracticeSkillsPage.constants';
 
 // Stub: skills within a domain. Route wiring is owned by the app-shell segment.

@@ -3,8 +3,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { ROUTES } from '@/constants/routes';
 import { useSessionCheck } from '@/hooks/use-session-check';
 import { useAuthStore } from '@/store/auth-store';
-import { AppShell } from '@/components/layout/AppShell/AppShell';
-import { LoggedOutScreen } from '@/components/layout/LoggedOutScreen/LoggedOutScreen';
+import { AppShell } from '@/components/layout/AppShell';
+import { LoggedOutScreen } from '@/components/layout/LoggedOutScreen';
 import {
   LoginPage,
   SignupPage,

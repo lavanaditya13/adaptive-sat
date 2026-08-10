@@ -1,4 +1,4 @@
-import { PagePlaceholder } from '@/components/layout/PagePlaceholder/PagePlaceholder';
+import { PagePlaceholder } from '@/components/layout/PagePlaceholder';
 import { PAGE_DESCRIPTION, PAGE_TITLE } from './PracticeConfirmPage.constants';
 
 // Stub: pre-session confirmation. Set `setTrailingCrumbLabel` from the

@@ -1,9 +1,9 @@
 import { NAV_GROUPS } from '@/constants/navigation';
 import { useShellNavigation } from '@/hooks/use-shell-navigation';
 import { useAppShellStore } from '@/store/app-shell-store';
-import { BrandMark } from '@/components/layout/BrandMark/BrandMark';
-import { NavItemButton } from '@/components/layout/NavItemButton/NavItemButton';
-import { UserMenu } from '@/components/layout/UserMenu/UserMenu';
+import { BrandMark } from '@/components/layout/BrandMark';
+import { NavItemButton } from '@/components/layout/NavItemButton';
+import { UserMenu } from '@/components/layout/UserMenu';
 import {
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_EXPANDED_WIDTH,
