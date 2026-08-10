@@ -35,3 +35,16 @@ const SECTION_THEMES: Record<SectionName, SectionTheme> = {
 export function getSectionTheme(sectionName: string): SectionTheme {
   return SECTION_THEMES[sectionName as SectionName] ?? DEFAULT_THEME;
 }
+
+const SECTION_DISPLAY_NAMES: Record<string, string> = {
+  math: 'Math',
+  reading_writing: 'Reading & Writing',
+};
+
+export function getSectionDisplayName(sectionName: string | undefined): string {
+  if (!sectionName) {
+    return '';
+  }
+
+  return SECTION_DISPLAY_NAMES[sectionName] ?? sectionName;
+}
