@@ -176,6 +176,7 @@ async def seed_sat_questions(seed_file: Path, commit_every: int) -> None:
                             name=item["topic_name"],
                             code=topic_code,
                             description=item.get("topic_description"),
+                            section=item["section"],
                         )
                         db.add(topic)
                         await db.flush()

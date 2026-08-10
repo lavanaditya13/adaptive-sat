@@ -30,3 +30,12 @@ PRACTICE_SESSION_QUESTION_STATUS_ANSWERED = "answered"
 SESSION_ALREADY_IN_PROGRESS_DETAIL = (
     "A practice session is already in progress for this student."
 )
+
+# --- Section codes -----------------------------------------------------------
+# Same two values as sections.name / practice_service.SECTION_CODES, but that
+# dict is keyed by sections.id and lives in practice_service (importing it
+# from there for a schema-layer default would be a layering inversion) --
+# spelled here once so Topic.section and the seed script don't hand-type the
+# literals a third and fourth time.
+SECTION_MATH = "math"
+SECTION_READING_WRITING = "reading_writing"
