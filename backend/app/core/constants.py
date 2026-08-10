@@ -6,11 +6,24 @@ see the backend rules in CLAUDE.md ("no magic strings/literals" / "duplicate
 queries and literals consolidate into one location").
 """
 
+from enum import Enum
+
+
 # --- PracticeSession.status -------------------------------------------------
-PRACTICE_SESSION_STATUS_IN_PROGRESS = "in_progress"
-PRACTICE_SESSION_STATUS_READY_TO_COMPLETE = "ready_to_complete"
-PRACTICE_SESSION_STATUS_COMPLETED = "completed"
-PRACTICE_SESSION_STATUS_ABANDONED = "abandoned"
+class PracticeSessionStatus(str, Enum):
+    """Canonical set of PracticeSession.status values. The model column is
+    typed with this enum (see app/models/practice_session.py), and the DB
+    additionally enforces it with a CHECK constraint (see alembic revision
+    f3a7c1e9d5b2_*), so a value outside this set can't be written by either
+    a bug in application code or a hand-run SQL statement.
+    """
+
+    IN_PROGRESS = "in_progress"
+    READY_TO_COMPLETE = "ready_to_complete"
+    COMPLETED = "completed"
+    ABANDONED = "abandoned"
+    EXPIRED = "expired"
+
 
 # A session is "active" (blocks starting a new one, is returned by
 # /practice/current-question, etc.) while it's still being answered or
@@ -18,8 +31,8 @@ PRACTICE_SESSION_STATUS_ABANDONED = "abandoned"
 # alembic/versions/b7a1c9f4e3d2_*.py, which enforces the same predicate at
 # the database level.
 ACTIVE_PRACTICE_SESSION_STATUSES = (
-    PRACTICE_SESSION_STATUS_IN_PROGRESS,
-    PRACTICE_SESSION_STATUS_READY_TO_COMPLETE,
+    PracticeSessionStatus.IN_PROGRESS,
+    PracticeSessionStatus.READY_TO_COMPLETE,
 )
 
 # --- PracticeSessionQuestion.status -----------------------------------------
