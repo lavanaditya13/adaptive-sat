@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import PRACTICE_SESSION_STATUS_COMPLETED
+from app.core.constants import PracticeSessionStatus
 from app.models.practice_session import PracticeSession
 from app.models.question import Question
 from app.models.section import Section
@@ -65,7 +65,7 @@ async def get_student_dashboard(
         .select_from(PracticeSession)
         .where(
             PracticeSession.student_id == student_id,
-            PracticeSession.status == PRACTICE_SESSION_STATUS_COMPLETED,
+            PracticeSession.status == PracticeSessionStatus.COMPLETED,
         )
     )
     sessions_completed = sessions_completed_result.scalar_one()
