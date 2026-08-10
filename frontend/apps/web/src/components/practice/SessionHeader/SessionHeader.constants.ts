@@ -1,0 +1,10 @@
+export const NAV_PILL_PREFIX = 'Q';
+export const NAV_PILL_SEPARATOR = '/';
+export const OPEN_NAV_LABEL = 'Jump to a question';
+export const TOTAL_SUFFIX = 'total';
+export const QUESTION_COUNTER_PREFIX = 'Question';
+export const QUESTION_COUNTER_JOINER = 'of';
+export const PAUSE_LABEL = 'Pause session';
+export const RESUME_LABEL = 'Resume session';
+export const LIVE_TIMER_LABEL = 'Time on this question';
+export const SESSION_TIMER_LABEL = 'Total session time';
