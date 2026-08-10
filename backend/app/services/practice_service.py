@@ -273,8 +273,10 @@ def _is_session_stale(session: PracticeSession, last_attempt_at: datetime | None
 async def _get_next_assigned_question(
     db: AsyncSession,
     session_id: int,
+    *,
+    for_update: bool = False,
 ) -> PracticeSessionQuestion | None:
-    result = await db.execute(
+    query = (
         select(PracticeSessionQuestion)
         .where(
             PracticeSessionQuestion.practice_session_id == session_id,
@@ -283,6 +285,22 @@ async def _get_next_assigned_question(
         .order_by(PracticeSessionQuestion.position.asc())
         .limit(1)
     )
+
+    # submit_answer passes for_update=True: it reads this row, mutates its
+    # status, then re-counts remaining assigned rows to decide whether the
+    # session is ready to complete — three round trips with nothing stopping
+    # two concurrent calls (a double-clicked "Next", a retried request) from
+    # both reading the row as still "assigned" before either writes back.
+    # The row lock serializes them: the second call blocks here until the
+    # first commits, then re-reads the now-"answered" row and (since it no
+    # longer matches the WHERE clause) correctly finds nothing to grab
+    # instead of racing the first to mutate/recount the same row. Read-only
+    # callers (get_current_question, start_practice_session) don't need
+    # this and pass the default.
+    if for_update:
+        query = query.with_for_update()
+
+    result = await db.execute(query)
 
     return result.scalar_one_or_none()
 
@@ -559,7 +577,9 @@ async def submit_answer(
             detail="Practice session is not accepting answers",
         )
 
-    session_question = await _get_next_assigned_question(db=db, session_id=session.id)
+    session_question = await _get_next_assigned_question(
+        db=db, session_id=session.id, for_update=True
+    )
 
     if session_question is None:
         raise HTTPException(
