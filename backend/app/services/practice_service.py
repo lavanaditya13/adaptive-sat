@@ -734,6 +734,33 @@ async def abandon_practice_session(
     return PracticeAbandonResponse(status=session.status)
 
 
+async def expire_stale_practice_sessions(db: AsyncSession) -> int:
+    """Sweep every in_progress/ready_to_complete session, across all
+    students, that's been inactive past PRACTICE_SESSION_EXPIRE_HOURS and
+    mark it expired.
+
+    This exists because the staleness handling in start_practice_session
+    only fires when the *same* student who owns the stale session tries to
+    start a new one -- a student who never comes back leaves their session
+    sitting in_progress forever with nothing to ever revisit it. This
+    function is that revisit: called from a schedule (see
+    backend/scripts/expire_stale_practice_sessions.py, invoked by the
+    expire-practice-sessions GitHub Actions cron), not from any request
+    path, so it runs without depending on student activity at all.
+
+    Returns the number of sessions expired.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        hours=settings.PRACTICE_SESSION_EXPIRE_HOURS
+    )
+    expired_count = await practice_session_repository.expire_stale_sessions(
+        db, cutoff=cutoff
+    )
+    await db.commit()
+
+    return expired_count
+
+
 async def complete_practice_session(
     db: AsyncSession,
     student: User,

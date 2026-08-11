@@ -45,6 +45,17 @@ class Settings(BaseSettings):
     # instead of permanently blocking them with a 409.
     PRACTICE_SESSION_STALE_MINUTES: int = 180
 
+    # Final sweep for sessions whose student never comes back at all, so
+    # PRACTICE_SESSION_STALE_MINUTES above never gets a chance to fire (that
+    # check only runs when *that* student starts a new session). Applied by
+    # expire_stale_practice_sessions in practice_service.py, invoked on a
+    # schedule via scripts/expire_stale_practice_sessions.py -- not tied to
+    # any request path, so a session left in_progress/ready_to_complete this
+    # long gets marked expired regardless of whether anyone ever asks again.
+    # Deliberately much longer than PRACTICE_SESSION_STALE_MINUTES: this is
+    # the no-second-chances backstop, not the same-student handoff.
+    PRACTICE_SESSION_EXPIRE_HOURS: int = 24
+
     # An Idempotency-Key reservation stuck "in_progress" for longer than this
     # (see app/services/idempotency_service.py) is treated as abandoned --
     # the request that created it was presumably killed mid-flight (per

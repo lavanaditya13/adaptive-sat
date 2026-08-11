@@ -176,6 +176,33 @@ async def test_abandon_practice_session_marks_active_session_abandoned(monkeypat
     assert db.commit_count == 1
 
 
+@pytest.mark.asyncio
+async def test_expire_stale_practice_sessions_uses_configured_ttl_and_commits(monkeypatch):
+    """Pins two things at once: the cutoff handed to the repository is
+    derived from PRACTICE_SESSION_EXPIRE_HOURS (not
+    PRACTICE_SESSION_STALE_MINUTES -- easy to mix up given how similar the
+    two settings are), and the service -- not the repository -- owns the
+    commit, per this codebase's transaction-ownership convention."""
+    mock_expire_stale_sessions = AsyncMock(return_value=3)
+    monkeypatch.setattr(
+        practice_service_module.practice_session_repository,
+        "expire_stale_sessions",
+        mock_expire_stale_sessions,
+    )
+
+    db = _FakeSession([])
+    result = await practice_service_module.expire_stale_practice_sessions(db=db)
+
+    assert result == 3
+    assert db.commit_count == 1
+
+    passed_cutoff = mock_expire_stale_sessions.await_args.kwargs["cutoff"]
+    expected_cutoff = datetime.now(timezone.utc) - timedelta(
+        hours=practice_service_module.settings.PRACTICE_SESSION_EXPIRE_HOURS
+    )
+    assert abs((expected_cutoff - passed_cutoff).total_seconds()) < 5
+
+
 @pytest.mark.parametrize(
     "created_at,last_attempt_at,expected_stale",
     [
