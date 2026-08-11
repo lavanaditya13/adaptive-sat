@@ -59,8 +59,13 @@ def _make_session_question(*, position: int = 1, question_id: int = 1) -> Practi
 
 
 class _FakeResult:
-    def __init__(self, value):
+    def __init__(self, value, rowcount: int = 1):
         self._value = value
+        # Only meaningful for UPDATE/DELETE results (see
+        # complete_practice_session's concurrency-safe conditional UPDATE);
+        # defaults to 1 ("the row was updated") since most canned results
+        # here stand in for SELECT results that never touch it.
+        self.rowcount = rowcount
 
     def scalar_one(self):
         return self._value
@@ -98,6 +103,11 @@ class _FakeSession:
 
     def add(self, obj):
         self.added.append(obj)
+        # Mimics autoincrement PK assignment on flush/commit against a real
+        # AsyncSession — callers read obj.id back out (e.g. attempt_id on
+        # SubmitAnswerResponse), which stays None without this.
+        if isinstance(obj, Attempt) and obj.id is None:
+            obj.id = 999
 
     async def flush(self):
         return None
@@ -217,6 +227,7 @@ def _complete_session_db(attempts: list[Attempt]) -> _FakeSession:
         execute_results=[
             _FakeResult(_make_session()),  # active-session lookup
             _FakeResult(attempts),  # session attempts
+            _FakeResult(None, rowcount=1),  # conditional UPDATE ... status=completed
             _FakeResult([(session_question, attempt, question) for attempt in attempts]),
         ]
     )
