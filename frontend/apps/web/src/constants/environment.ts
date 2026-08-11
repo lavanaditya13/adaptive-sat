@@ -4,16 +4,16 @@ function normalize(url: string): string {
   return url.replace(/\/+$/, '');
 }
 
-let resolvedLocalBaseUrl: string | null = null;
+let baseUrlPromise: Promise<string> | null = null;
 
-// Resolves the API base URL to use:
+// Resolves the API base URL to use, caching the decision for the lifetime of
+// the page load:
 // - An explicit VITE_API_BASE_URL always wins, no probing.
 // - In a real deployed build, the frontend and backend are served from the
 //   same Vercel project/origin, so a relative base URL ('') is all we need.
 // - Only when running the frontend locally (`vite dev`, no explicit
-//   override) do we always target http://localhost:8000.
-//   There is no Vite proxy in this repo, so falling back to a relative
-//   origin can silently send auth/email calls to the wrong backend.
+//   override) do we use http://localhost:8000 by default. The backend must be
+//   running for API/OAuth flows to work locally; there is no Vite proxy here.
 export function resolveApiBaseUrl(): Promise<string> {
   const explicitBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
@@ -25,10 +25,9 @@ export function resolveApiBaseUrl(): Promise<string> {
     return Promise.resolve('');
   }
 
-  if (resolvedLocalBaseUrl) {
-    return Promise.resolve(resolvedLocalBaseUrl);
+  if (!baseUrlPromise) {
+    baseUrlPromise = Promise.resolve(LOCAL_API_BASE_URL);
   }
 
-  resolvedLocalBaseUrl = LOCAL_API_BASE_URL;
-  return Promise.resolve(resolvedLocalBaseUrl);
+  return baseUrlPromise;
 }

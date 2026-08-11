@@ -105,6 +105,11 @@ class PracticeQuestionResponse(BaseModel):
     current_position: Optional[int] = None
     total_questions: int
     question: Optional[PublicQuestionResponse] = None
+    # Populated when navigating back to a position the student already answered,
+    # so the client can re-render their previous selection instead of a blank form.
+    is_answered: bool = False
+    selected_answer: Optional[str] = None
+    confidence_level: Optional[int] = None
 
 
 class PracticeStartResponse(BaseModel):
@@ -115,20 +120,37 @@ class PracticeStartResponse(BaseModel):
     question: Optional[PublicQuestionResponse] = None
 
 
-class PracticeAbandonResponse(BaseModel):
-    status: str
-
-
 class SubmitAnswerRequest(BaseModel):
     selected_answer: Optional[str] = None
     time_spent_seconds: Optional[int] = Field(default=None, ge=0)
     confidence_level: Optional[int] = Field(default=None, ge=1, le=5)
+    # Explicit target position. Omitted means "the earliest unanswered question",
+    # which is the only behaviour older clients relied on. Sending it is required
+    # for free navigation: without it, answering while parked on question 5 would
+    # silently record against skipped question 3.
+    position: Optional[int] = Field(default=None, ge=1)
 
 
 class SubmitAnswerResponse(BaseModel):
     saved: bool
     answered_position: int
     remaining_questions: int
+    # True when this overwrote an answer the student had already given.
+    is_update: bool = False
+
+
+class SessionQuestionState(BaseModel):
+    position: int
+    status: str
+
+
+class PracticeNavigationResponse(BaseModel):
+    status: str
+    total_questions: int
+    answered_count: int
+    remaining_count: int
+    next_unanswered_position: Optional[int] = None
+    questions: list[SessionQuestionState] = []
 
 
 class ScoreSummary(BaseModel):

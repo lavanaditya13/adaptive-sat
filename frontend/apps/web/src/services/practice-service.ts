@@ -6,8 +6,8 @@ import type {
   SectionContextResponse,
   StartPracticeResponse,
   AnswerResponse,
-  AbandonResponse,
   QuestionResponse,
+  NavigationResponse,
   CompleteResponse,
 } from '@/types/api';
 
@@ -53,30 +53,21 @@ export async function startPractice(
   }
 }
 
-export async function abandonPractice(): Promise<AbandonResponse> {
-  try {
-    const response = await apiClient.post<AbandonResponse>(API.PRACTICE.ABANDON);
-    return response.data;
-  } catch (error) {
-    if (!shouldUseMockFallback(error)) {
-      throw error;
-    }
-
-    console.warn('API abandonPractice failed, returning mock fallback response:', error);
-    return mockHandlers.abandonPractice();
-  }
-}
-
 export async function submitAnswer(
   selectedAnswer: string,
   timeSpentSeconds: number,
-  confidenceLevel: number
+  confidenceLevel: number,
+  position?: number
 ): Promise<AnswerResponse> {
   try {
     const response = await apiClient.post<AnswerResponse>(API.PRACTICE.ANSWER, {
       selected_answer: selectedAnswer,
       time_spent_seconds: timeSpentSeconds,
       confidence_level: confidenceLevel,
+      // Always sent when known: the backend otherwise records against the
+      // earliest unanswered question, which is the wrong one as soon as the
+      // student has skipped or navigated backwards.
+      position,
     });
     return response.data;
   } catch (error) {
@@ -89,11 +80,13 @@ export async function submitAnswer(
   }
 }
 
-// ASSUMPTION (not confirmed by backend): no param returns the active session's current question.
-// Comment this clearly — if wrong, this is the first thing to fix.
-export async function getCurrentQuestion(): Promise<QuestionResponse> {
+// No param returns the earliest unanswered question in the active session.
+// Passing `position` returns that exact position, answered or not.
+export async function getCurrentQuestion(position?: number): Promise<QuestionResponse> {
   try {
-    const response = await apiClient.get<QuestionResponse>(API.PRACTICE.QUESTION);
+    const response = await apiClient.get<QuestionResponse>(API.PRACTICE.QUESTION, {
+      params: position === undefined ? undefined : { position },
+    });
     return response.data;
   } catch (error) {
     if (!shouldUseMockFallback(error)) {
@@ -103,6 +96,11 @@ export async function getCurrentQuestion(): Promise<QuestionResponse> {
     console.warn('API getCurrentQuestion failed, returning mock fallback response:', error);
     return mockHandlers.getCurrentQuestion();
   }
+}
+
+export async function getSessionNavigation(): Promise<NavigationResponse> {
+  const response = await apiClient.get<NavigationResponse>(API.PRACTICE.NAVIGATION);
+  return response.data;
 }
 
 export async function completePractice(): Promise<CompleteResponse> {

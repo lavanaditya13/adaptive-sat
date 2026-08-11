@@ -38,8 +38,6 @@ from app.schemas.auth import (
     LoginRequest,
     LoginResponse,
     ResendVerificationByEmailRequest,
-    RefreshRequest,
-    RefreshResponse,
     ResetPasswordRequest,
     SignupRequest,
     VerifyEmailRequest,
@@ -61,12 +59,16 @@ def _issue_session(response: Response, user: User) -> LoginResponse:
     access_token = create_access_token(user.id)
     is_production = settings.ENVIRONMENT == "production"
 
+    # SameSite=Lax in every environment: the frontend and backend are served
+    # from the same Vercel project/origin, so the cookie never needs to travel
+    # cross-site. Lax also blocks the cross-site form POSTs that would
+    # otherwise reach body-less endpoints (there is no CSRF token).
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
         secure=is_production,
-        samesite="none" if is_production else "lax",
+        samesite="lax",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
@@ -234,7 +236,6 @@ async def me(current_user: User = Depends(get_current_user)):
 @router.post("/verify-email", response_model=AuthResponse)
 async def verify_email_endpoint(
     payload: VerifyEmailRequest,
-    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -249,10 +250,6 @@ async def verify_email_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
-
-    # Verification completes the onboarding flow, so establish a session just
-    # like login/OAuth before redirecting the frontend to protected routes.
-    _issue_session(response, user)
 
     return AuthResponse(
         user=AuthUserResponse(
@@ -377,40 +374,3 @@ async def reset_password_endpoint(
 async def logout(response: Response):
     """Clear the session cookie."""
     response.delete_cookie(key="access_token", path="/")
-
-
-@router.post("/refresh", response_model=RefreshResponse)
-async def refresh(
-    refresh_in: RefreshRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """Issue a new access token from a valid refresh token."""
-    from jose import JWTError, jwt
-
-    from app.core.security import ALGORITHM
-
-    try:
-        payload = jwt.decode(
-            refresh_in.refresh_token,
-            settings.SECRET_KEY,
-            algorithms=[ALGORITHM],
-        )
-        user_id = payload.get("sub")
-
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid refresh token",
-            )
-    except JWTError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-        ) from exc
-
-    new_access_token = create_access_token(user_id)
-
-    return RefreshResponse(
-        access_token=new_access_token,
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-    )

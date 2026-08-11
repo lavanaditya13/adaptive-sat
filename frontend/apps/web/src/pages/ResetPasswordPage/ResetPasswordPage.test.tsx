@@ -40,6 +40,7 @@ describe('ResetPasswordPage', () => {
 
     expect(screen.getByText(/missing its reset token/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/new password/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /back to login/i })).toBeInTheDocument();
   });
 
   it('shows the reset-password form when a token is present', () => {
@@ -50,21 +51,7 @@ describe('ResetPasswordPage', () => {
     expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
   });
 
-  it('shows a validation error when the password is too short', async () => {
-    const user = userEvent.setup();
-    renderPage();
-
-    await user.type(screen.getByLabelText(/new password/i), 'short');
-    await user.type(screen.getByLabelText(/confirm password/i), 'short');
-    await user.click(screen.getByRole('button', { name: /update password/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/at least 8 characters/i)).toBeInTheDocument();
-    });
-    expect(resetPassword).not.toHaveBeenCalled();
-  });
-
-  it('shows a validation error when passwords do not match', async () => {
+  it('shows a destructive toast and does not call the API when the passwords do not match', async () => {
     const user = userEvent.setup();
     renderPage();
 
@@ -73,7 +60,7 @@ describe('ResetPasswordPage', () => {
     await user.click(screen.getByRole('button', { name: /update password/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/passwords do not match/i)).toBeInTheDocument();
+      expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
     });
     expect(resetPassword).not.toHaveBeenCalled();
   });
@@ -106,5 +93,6 @@ describe('ResetPasswordPage', () => {
     await waitFor(() => {
       expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
     });
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 });

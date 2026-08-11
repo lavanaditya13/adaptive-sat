@@ -11,7 +11,13 @@ import {
   STAT_LABEL_STYLES,
   STAT_VALUE_STYLES,
 } from './SectionCard.styles';
-import { ACCURACY_LABEL, QUESTIONS_LABEL, TOPICS_LABEL, PERCENT_SUFFIX } from './SectionCard.constants';
+import {
+  ACCURACY_LABEL,
+  QUESTIONS_LABEL,
+  TOPICS_LABEL,
+  PERCENT_SUFFIX,
+  SECTION_DESCRIPTIONS,
+} from './SectionCard.constants';
 
 interface Section {
   section_id: number;
@@ -26,11 +32,6 @@ interface SectionCardProps {
   section: Section;
   onOpen: (section: Section) => void;
 }
-
-const SECTION_DESCRIPTIONS: Record<string, string> = {
-  math: 'Algebra, advanced math, geometry, statistics, and data analysis.',
-  reading_writing: 'Information and ideas, craft, expression, grammar, and cross-text analysis.',
-};
 
 export function SectionCard({ section, onOpen }: SectionCardProps) {
   const theme = getSectionTheme(section.name);

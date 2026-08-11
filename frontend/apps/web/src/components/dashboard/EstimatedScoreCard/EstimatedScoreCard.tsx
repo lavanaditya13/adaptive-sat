@@ -1,6 +1,13 @@
 import { Card } from '@workspace/ui/components/card';
 import type { EstimatedScore } from '@/types/api';
-import { TITLE, TARGET_PREFIX, POINTS_TO_GO_SUFFIX, GOAL_MET_TEXT, RING_CAPTION } from './EstimatedScoreCard.constants';
+import {
+  TITLE,
+  TARGET_PREFIX,
+  POINTS_TO_GO_SUFFIX,
+  GOAL_MET_TEXT,
+  RING_CAPTION,
+  PERCENT_SUFFIX,
+} from './EstimatedScoreCard.constants';
 import {
   CARD_STYLES,
   TITLE_STYLES,
@@ -61,7 +68,10 @@ export function EstimatedScoreCard({ estimatedScore }: EstimatedScoreCardProps) 
           />
         </svg>
         <div className={RING_LABEL_STYLES}>
-          <span className={RING_PERCENT_STYLES}>{Math.round(percent_to_goal)}%</span>
+          <span className={RING_PERCENT_STYLES}>
+            {Math.round(percent_to_goal)}
+            {PERCENT_SUFFIX}
+          </span>
           <span className={RING_CAPTION_STYLES}>{RING_CAPTION}</span>
         </div>
       </div>

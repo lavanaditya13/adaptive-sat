@@ -5,8 +5,8 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.practice import (
-    PracticeAbandonResponse,
     PracticeCompleteResponse,
+    PracticeNavigationResponse,
     PracticeQuestionResponse,
     PracticeStartRequest,
     PracticeStartResponse,
@@ -16,7 +16,6 @@ from app.schemas.practice import (
     SubmitAnswerResponse,
 )
 from app.services.practice_service import (
-    abandon_practice_session,
     complete_practice_session,
     get_current_question,
     get_next_question,
@@ -46,14 +45,6 @@ async def start_practice(
     return await start_practice_session(db=db, request=request, student=current_user)
 
 
-@router.post("/abandon", response_model=PracticeAbandonResponse)
-async def abandon_session(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    return await abandon_practice_session(db=db, student=current_user)
-
-
 @router.post("/answer", response_model=SubmitAnswerResponse)
 async def answer_question(
     request: SubmitAnswerRequest,
@@ -65,11 +56,26 @@ async def answer_question(
 
 @router.get("/question", response_model=PracticeQuestionResponse)
 async def current_question(
-    questionId: int | None = Query(default=None, alias="questionId"),
+    position: int | None = Query(default=None, ge=1),
+    questionId: int | None = Query(default=None, alias="questionId", deprecated=True),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await get_current_question(db=db, student=current_user, question_id=questionId)
+    # `questionId` always meant position, never a Question.id — kept as a
+    # deprecated alias so older clients keep working.
+    return await get_current_question(
+        db=db,
+        student=current_user,
+        position=position if position is not None else questionId,
+    )
+
+
+@router.get("/navigation", response_model=PracticeNavigationResponse)
+async def session_navigation(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_session_navigation(db=db, student=current_user)
 
 
 @router.get("/next", response_model=PracticeQuestionResponse)

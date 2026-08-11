@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -19,12 +18,13 @@ from app.models.topic import Topic
 from app.models.user import User
 from app.schemas.practice import (
     AdaptiveUnlockResponse,
-    PracticeAbandonResponse,
     PracticeCompleteResponse,
+    PracticeNavigationResponse,
     PracticeQuestionResponse,
     PracticeStartRequest,
     PracticeStartResponse,
     QuestionBreakdownItem,
+    SessionQuestionState,
     SectionPracticeOption,
     SectionSelectionResponse,
     TopicActionItem,
@@ -227,26 +227,6 @@ async def _get_active_session_for_student(
     return session
 
 
-async def _get_latest_attempt_at(
-    db: AsyncSession,
-    session_id: int,
-) -> datetime | None:
-    result = await db.execute(
-        select(func.max(Attempt.created_at)).where(
-            Attempt.practice_session_id == session_id
-        )
-    )
-    return result.scalar_one_or_none()
-
-
-def _is_session_stale(session: PracticeSession, last_attempt_at: datetime | None) -> bool:
-    last_activity_at = last_attempt_at or session.created_at
-    stale_cutoff = datetime.now(timezone.utc) - timedelta(
-        minutes=settings.PRACTICE_SESSION_STALE_MINUTES
-    )
-    return last_activity_at < stale_cutoff
-
-
 async def _get_next_assigned_question(
     db: AsyncSession,
     session_id: int,
@@ -258,6 +238,48 @@ async def _get_next_assigned_question(
             PracticeSessionQuestion.status == "assigned",
         )
         .order_by(PracticeSessionQuestion.position.asc())
+        .limit(1)
+    )
+
+    return result.scalar_one_or_none()
+
+
+async def _get_session_question_at(
+    db: AsyncSession,
+    session_id: int,
+    position: int,
+) -> PracticeSessionQuestion:
+    result = await db.execute(
+        select(PracticeSessionQuestion).where(
+            PracticeSessionQuestion.practice_session_id == session_id,
+            PracticeSessionQuestion.position == position,
+        )
+    )
+    session_question = result.scalar_one_or_none()
+
+    if session_question is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    return session_question
+
+
+async def _get_attempt_for(
+    db: AsyncSession,
+    session_id: int,
+    question_id: int,
+) -> Attempt | None:
+    """Most recent attempt for a question inside a session.
+
+    A position can be answered more than once now that students can navigate
+    back, so this orders newest-first rather than assuming a single row.
+    """
+    result = await db.execute(
+        select(Attempt)
+        .where(
+            Attempt.practice_session_id == session_id,
+            Attempt.question_id == question_id,
+        )
+        .order_by(Attempt.id.desc())
         .limit(1)
     )
 
@@ -301,20 +323,10 @@ async def start_practice_session(
     active_session = existing_session_result.scalar_one_or_none()
 
     if active_session is not None:
-        last_attempt_at = await _get_latest_attempt_at(db=db, session_id=active_session.id)
-
-        if not _is_session_stale(active_session, last_attempt_at):
-            raise HTTPException(
-                status_code=409,
-                detail="A practice session is already in progress for this student.",
-            )
-
-        # Stale and either never answered or idle past the timeout — supersede
-        # it rather than leaving the student permanently locked out. A student
-        # who explicitly wants to abandon a fresh session should use
-        # abandon_practice_session instead of waiting for this to kick in.
-        active_session.status = "abandoned"
-        await db.flush()
+        raise HTTPException(
+            status_code=409,
+            detail="A practice session is already in progress for this student.",
+        )
 
     question_count = request.question_count or settings.DEFAULT_PRACTICE_QUESTION_COUNT
     selected_section_id = await _get_selected_section_id(db=db, student_id=student.id)
@@ -397,17 +409,7 @@ async def start_practice_session(
     )
 
     db.add(session)
-
-    try:
-        await db.flush()
-    except IntegrityError:
-        # Lost a race against a concurrent /start for the same student — the
-        # partial unique index on practice_sessions(student_id) caught it.
-        await db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="A practice session is already in progress for this student.",
-        )
+    await db.flush()
 
     for index, question in enumerate(questions, start=1):
         db.add(
@@ -449,7 +451,7 @@ async def start_practice_session(
 async def get_current_question(
     db: AsyncSession,
     student: User,
-    question_id: int | None = None,
+    position: int | None = None,
 ) -> PracticeQuestionResponse:
     session = await _get_active_session_for_student(db=db, student_id=student.id)
 
@@ -461,25 +463,18 @@ async def get_current_question(
             question=None,
         )
 
-    if question_id is None:
+    if position is None:
         session_question = await _get_next_assigned_question(db, session.id)
     else:
-        session_question_result = await db.execute(
-            select(PracticeSessionQuestion).where(
-                PracticeSessionQuestion.practice_session_id == session.id,
-                PracticeSessionQuestion.position == question_id,
-            )
+        # Any position in the session is addressable, answered or not — that is
+        # what makes stepping backwards (and revising) possible. Previously this
+        # rejected answered positions with a 400, so the client could only ever
+        # move forward.
+        session_question = await _get_session_question_at(
+            db=db,
+            session_id=session.id,
+            position=position,
         )
-        session_question = session_question_result.scalar_one_or_none()
-
-        if session_question is None:
-            raise HTTPException(status_code=404, detail="Question not found")
-
-        if session_question.status != "assigned":
-            raise HTTPException(
-                status_code=400,
-                detail="Question has already been answered",
-            )
 
     if session_question is None:
         if session.status == "in_progress":
@@ -498,11 +493,25 @@ async def get_current_question(
         question_id=session_question.question_id,
     )
 
+    is_answered = session_question.status == "answered"
+    previous_attempt = (
+        await _get_attempt_for(
+            db=db,
+            session_id=session.id,
+            question_id=session_question.question_id,
+        )
+        if is_answered
+        else None
+    )
+
     return PracticeQuestionResponse(
         status=session.status,
         current_position=session_question.position,
         total_questions=session.question_count,
         question=_public_question(question, session_question.position),
+        is_answered=is_answered,
+        selected_answer=previous_attempt.selected_answer if previous_attempt else None,
+        confidence_level=previous_attempt.confidence_level if previous_attempt else None,
     )
 
 
@@ -519,7 +528,17 @@ async def submit_answer(
             detail="Practice session is not accepting answers",
         )
 
-    session_question = await _get_next_assigned_question(db=db, session_id=session.id)
+    if request.position is None:
+        session_question = await _get_next_assigned_question(db=db, session_id=session.id)
+    else:
+        # Free navigation means the question on screen is not necessarily the
+        # earliest unanswered one. Trusting the pointer here would record the
+        # answer against a skipped question further back in the session.
+        session_question = await _get_session_question_at(
+            db=db,
+            session_id=session.id,
+            position=request.position,
+        )
 
     if session_question is None:
         raise HTTPException(
@@ -545,20 +564,31 @@ async def submit_answer(
         confidence_level=request.confidence_level,
     )
 
-    attempt = Attempt(
-        practice_session_id=session.id,
-        student_id=session.student_id,
+    # Revising an answer must overwrite the existing attempt. Inserting a second
+    # row would double-count the question in the score summary and skew per-topic
+    # accuracy, since skill_scoring_service aggregates over every Attempt row.
+    attempt = await _get_attempt_for(
+        db=db,
+        session_id=session.id,
         question_id=question.id,
-        topic_id=question.topic_id,
-        selected_answer=selected_answer,
-        correct_answer=question.correct_answer,
-        is_correct=is_correct,
-        time_spent_seconds=request.time_spent_seconds,
-        confidence_level=request.confidence_level,
-        mistake_type=mistake_type,
     )
+    is_update = attempt is not None
 
-    db.add(attempt)
+    if attempt is None:
+        attempt = Attempt(
+            practice_session_id=session.id,
+            student_id=session.student_id,
+            question_id=question.id,
+            topic_id=question.topic_id,
+        )
+        db.add(attempt)
+
+    attempt.selected_answer = selected_answer
+    attempt.correct_answer = question.correct_answer
+    attempt.is_correct = is_correct
+    attempt.time_spent_seconds = request.time_spent_seconds
+    attempt.confidence_level = request.confidence_level
+    attempt.mistake_type = mistake_type
 
     session_question.status = "answered"
     session_question.answered_at = datetime.now(timezone.utc)
@@ -598,19 +628,40 @@ async def get_next_question(
     return await get_current_question(db=db, student=student)
 
 
-async def abandon_practice_session(
+async def get_session_navigation(
     db: AsyncSession,
     student: User,
-) -> PracticeAbandonResponse:
-    """Let a student explicitly give up their in-progress session so they can
-    start a new one immediately, instead of waiting for the staleness window
-    in start_practice_session to kick in."""
+) -> PracticeNavigationResponse:
+    """Per-position answered/unanswered map for the active session.
+
+    The client needs this to render prev/next/skip affordances and to decide
+    whether finishing is allowed, without having to keep its own shadow copy of
+    session state (which was lost on every page reload).
+    """
     session = await _get_active_session_for_student(db=db, student_id=student.id)
 
-    session.status = "abandoned"
-    await db.commit()
+    result = await db.execute(
+        select(PracticeSessionQuestion)
+        .where(PracticeSessionQuestion.practice_session_id == session.id)
+        .order_by(PracticeSessionQuestion.position.asc())
+    )
+    session_questions = result.scalars().all()
 
-    return PracticeAbandonResponse(status=session.status)
+    questions = [
+        SessionQuestionState(position=sq.position, status=sq.status)
+        for sq in session_questions
+    ]
+    answered_count = sum(1 for sq in session_questions if sq.status == "answered")
+    unanswered = [sq.position for sq in session_questions if sq.status != "answered"]
+
+    return PracticeNavigationResponse(
+        status=session.status,
+        total_questions=session.question_count,
+        answered_count=answered_count,
+        remaining_count=len(unanswered),
+        next_unanswered_position=unanswered[0] if unanswered else None,
+        questions=questions,
+    )
 
 
 async def complete_practice_session(

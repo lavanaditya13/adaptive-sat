@@ -48,7 +48,10 @@ import {
   GREETING_STYLES,
   STATS_GRID_STYLES,
   SECTIONS_GRID_STYLES,
+  SECTIONS_BLOCK_STYLES,
   SECTION_TITLE_STYLES,
+  ERROR_CONTAINER_STYLES,
+  ERROR_MESSAGE_STYLES,
   SKELETON_GREETING_STYLES,
   SKELETON_STAT_STYLES,
   SKELETON_SCORE_STYLES,
@@ -124,8 +127,8 @@ export function DashboardPage() {
     const message = getApiErrorDetail(error);
 
     return (
-      <div className="flex min-h-screen items-center justify-center px-6 text-center">
-        <p className="max-w-xl text-balance text-lg font-medium text-foreground">{message}</p>
+      <div className={ERROR_CONTAINER_STYLES}>
+        <p className={ERROR_MESSAGE_STYLES}>{message}</p>
       </div>
     );
   }
@@ -203,7 +206,7 @@ export function DashboardPage() {
 
       <WeakTopicsList topics={dashboard.weak_topics} />
 
-      <div className="space-y-4">
+      <div className={SECTIONS_BLOCK_STYLES}>
         <h2 className={SECTION_TITLE_STYLES}>{SECTIONS_TITLE}</h2>
         <div className={SECTIONS_GRID_STYLES}>
           {dashboard.sections.map((section) => (

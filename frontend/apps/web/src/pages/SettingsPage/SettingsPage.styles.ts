@@ -6,3 +6,4 @@ export const ACCOUNT_ROW_STYLES = 'flex items-center justify-between rounded-xl 
 export const ACCOUNT_NAME_STYLES = 'text-sm font-medium';
 export const ACCOUNT_EMAIL_STYLES = 'text-xs text-muted-foreground';
 export const SKELETON_ROW_STYLES = 'h-16 w-full rounded-xl';
+export const ERROR_MESSAGE_STYLES = 'text-sm text-destructive';

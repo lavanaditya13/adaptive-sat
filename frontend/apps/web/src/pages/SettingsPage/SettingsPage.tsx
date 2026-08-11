@@ -17,6 +17,7 @@ import {
   ACCOUNT_NAME_STYLES,
   ACCOUNT_EMAIL_STYLES,
   SKELETON_ROW_STYLES,
+  ERROR_MESSAGE_STYLES,
 } from './SettingsPage.styles';
 import {
   TITLE,
@@ -64,7 +65,7 @@ export function SettingsPage() {
 
         {isLoading && <Skeleton className={SKELETON_ROW_STYLES} />}
 
-        {error && <p className="text-sm text-destructive">{LOAD_ERROR_MESSAGE}</p>}
+        {error && <p className={ERROR_MESSAGE_STYLES}>{LOAD_ERROR_MESSAGE}</p>}
 
         {data && (
           <ConnectedProvidersList

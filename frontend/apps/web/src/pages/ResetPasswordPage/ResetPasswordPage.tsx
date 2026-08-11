@@ -1,5 +1,4 @@
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@workspace/ui/components/button';
 import { Input } from '@workspace/ui/components/input';
@@ -8,7 +7,6 @@ import { resetPassword } from '@/services/auth-service';
 import { useToast } from '@/components/toast/toast-provider';
 import { getApiErrorDetail } from '@/utils/api-errors';
 import { ROUTES } from '@/constants/routes';
-import { resetPasswordSchema, type ResetPasswordFormData } from '@/utils/validation-schemas';
 import {
   CONTAINER_STYLES,
   CARD_STYLES,
@@ -31,9 +29,12 @@ import {
   BACK_TO_LOGIN_LABEL,
   MISSING_TOKEN_TOAST_TITLE,
   MISSING_TOKEN_TOAST_DESCRIPTION,
+  PASSWORD_MISMATCH_TITLE,
+  PASSWORD_MISMATCH_DESCRIPTION,
   PASSWORD_UPDATED_TITLE,
   PASSWORD_UPDATED_DESCRIPTION,
   RESET_ERROR_TITLE,
+  MIN_PASSWORD_LENGTH,
 } from './ResetPasswordPage.constants';
 
 export function ResetPasswordPage() {
@@ -41,15 +42,13 @@ export function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const token = searchParams.get('token');
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<ResetPasswordFormData>({
-    resolver: zodResolver(resetPasswordSchema),
-  });
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const onSubmit = async (data: ResetPasswordFormData) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
     if (!token) {
       toast({
         title: MISSING_TOKEN_TOAST_TITLE,
@@ -59,8 +58,18 @@ export function ResetPasswordPage() {
       return;
     }
 
+    if (password !== confirmPassword) {
+      toast({
+        title: PASSWORD_MISMATCH_TITLE,
+        description: PASSWORD_MISMATCH_DESCRIPTION,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      await resetPassword(token, data.password);
+      await resetPassword(token, password);
       toast({
         title: PASSWORD_UPDATED_TITLE,
         description: PASSWORD_UPDATED_DESCRIPTION,
@@ -73,6 +82,8 @@ export function ResetPasswordPage() {
         description: getApiErrorDetail(error),
         variant: 'destructive',
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -96,18 +107,18 @@ export function ResetPasswordPage() {
         <h1 className={TITLE_STYLES}>{TITLE}</h1>
         <p className={SUBTITLE_STYLES}>{SUBTITLE}</p>
 
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className={FORM_STYLES}>
+        <form onSubmit={handleSubmit} className={FORM_STYLES}>
           <div className={FIELD_STYLES}>
             <Label htmlFor="new-password">{NEW_PASSWORD_LABEL}</Label>
             <Input
               id="new-password"
               type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
               autoComplete="new-password"
-              {...register('password')}
+              minLength={MIN_PASSWORD_LENGTH}
+              required
             />
-            {errors.password && (
-              <p className="text-sm text-destructive">{errors.password.message}</p>
-            )}
           </div>
 
           <div className={FIELD_STYLES}>
@@ -115,12 +126,12 @@ export function ResetPasswordPage() {
             <Input
               id="confirm-password"
               type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
               autoComplete="new-password"
-              {...register('confirmPassword')}
+              minLength={MIN_PASSWORD_LENGTH}
+              required
             />
-            {errors.confirmPassword && (
-              <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
-            )}
           </div>
 
           <Button type="submit" disabled={isSubmitting} className={SUBMIT_BUTTON_STYLES}>

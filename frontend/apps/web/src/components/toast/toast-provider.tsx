@@ -1,6 +1,21 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
+import {
+  ICON_STYLES,
+  VIEWPORT_STYLES,
+  TOAST_BASE_STYLES,
+  TOAST_DESTRUCTIVE_STYLES,
+  TOAST_SUCCESS_STYLES,
+  TOAST_DEFAULT_STYLES,
+  TOAST_ROW_STYLES,
+  TOAST_CONTENT_STYLES,
+  TOAST_TITLE_STYLES,
+  TOAST_DESCRIPTION_STYLES,
+  DISMISS_BUTTON_STYLES,
+  DISMISS_ICON_STYLES,
+} from './toast-provider.styles';
+import { DISMISS_ARIA_LABEL, MISSING_PROVIDER_ERROR } from './toast-provider.constants';
 
 type ToastVariant = 'default' | 'destructive' | 'success';
 
@@ -22,17 +37,15 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 const AUTO_DISMISS_MS = 4500;
 
 function ToastIcon({ variant }: { variant: ToastVariant }) {
-  const iconClassName = 'size-4 shrink-0';
-
   if (variant === 'destructive') {
-    return <AlertCircle className={iconClassName} />;
+    return <AlertCircle className={ICON_STYLES} />;
   }
 
   if (variant === 'success') {
-    return <CheckCircle2 className={iconClassName} />;
+    return <CheckCircle2 className={ICON_STYLES} />;
   }
 
-  return <Info className={iconClassName} />;
+  return <Info className={ICON_STYLES} />;
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -85,33 +98,33 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={value}>
       {children}
 
-      <div className="pointer-events-none fixed right-4 top-4 z-50 flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-3 sm:right-6 sm:top-6 sm:w-full">
+      <div className={VIEWPORT_STYLES}>
         {toasts.map((toastItem) => (
           <div
             key={toastItem.id}
-            className={`pointer-events-auto rounded-xl border px-4 py-3 shadow-2xl backdrop-blur supports-[backdrop-filter]:bg-background/90 ${
+            className={`${TOAST_BASE_STYLES} ${
               toastItem.variant === 'destructive'
-                ? 'border-destructive/30 bg-destructive/10 text-destructive'
+                ? TOAST_DESTRUCTIVE_STYLES
                 : toastItem.variant === 'success'
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-                  : 'border-border bg-background text-foreground'
+                  ? TOAST_SUCCESS_STYLES
+                  : TOAST_DEFAULT_STYLES
             }`}
           >
-            <div className="flex items-start gap-3">
+            <div className={TOAST_ROW_STYLES}>
               <ToastIcon variant={toastItem.variant} />
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold">{toastItem.title}</div>
+              <div className={TOAST_CONTENT_STYLES}>
+                <div className={TOAST_TITLE_STYLES}>{toastItem.title}</div>
                 {toastItem.description ? (
-                  <div className="mt-1 text-sm opacity-90">{toastItem.description}</div>
+                  <div className={TOAST_DESCRIPTION_STYLES}>{toastItem.description}</div>
                 ) : null}
               </div>
               <button
                 type="button"
-                className="rounded-md p-1 opacity-70 transition hover:opacity-100"
+                className={DISMISS_BUTTON_STYLES}
                 onClick={() => dismissToast(toastItem.id)}
-                aria-label="Dismiss notification"
+                aria-label={DISMISS_ARIA_LABEL}
               >
-                <X className="size-4" />
+                <X className={DISMISS_ICON_STYLES} />
               </button>
             </div>
           </div>
@@ -126,7 +139,7 @@ export function useToast() {
   const context = useContext(ToastContext);
 
   if (!context) {
-    throw new Error('useToast must be used within a ToastProvider');
+    throw new Error(MISSING_PROVIDER_ERROR);
   }
 
   return context;

@@ -19,8 +19,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    docs_url=f"{settings.API_V1_STR}/docs",
-    redoc_url=f"{settings.API_V1_STR}/redoc",
     description="Backend API for Adaptive SAT Learning Platform",
     lifespan=lifespan,
 )
@@ -41,5 +39,5 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 async def root():
     return {
         "message": f"Welcome to the {settings.PROJECT_NAME} API.",
-        "documentation": f"{settings.API_V1_STR}/docs"
+        "documentation": "/docs"
     }

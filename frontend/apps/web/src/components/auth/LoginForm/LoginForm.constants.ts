@@ -8,3 +8,4 @@ export const SUBMIT_LABEL = 'Sign In';
 export const SUBMITTING_LABEL = 'Signing in...';
 export const NO_ACCOUNT = "Don't have an account?";
 export const SIGNUP_LINK = 'Sign up free';
+export const LOGIN_ERROR_TITLE = 'Login failed';

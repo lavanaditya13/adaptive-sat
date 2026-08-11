@@ -1,5 +1,4 @@
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@workspace/ui/components/button';
 import { Input } from '@workspace/ui/components/input';
@@ -8,7 +7,6 @@ import { requestPasswordReset } from '@/services/auth-service';
 import { useToast } from '@/components/toast/toast-provider';
 import { getApiErrorDetail } from '@/utils/api-errors';
 import { ROUTES } from '@/constants/routes';
-import { forgotPasswordSchema, type ForgotPasswordFormData } from '@/utils/validation-schemas';
 import {
   CONTAINER_STYLES,
   CARD_STYLES,
@@ -26,6 +24,8 @@ import {
   SUBMIT_LABEL,
   SUBMITTING_LABEL,
   BACK_TO_LOGIN_LABEL,
+  EMAIL_REQUIRED_TITLE,
+  EMAIL_REQUIRED_DESCRIPTION,
   RESET_LINK_SENT_TITLE,
   RESET_LINK_SENT_DESCRIPTION,
   RESET_LINK_ERROR_TITLE,
@@ -34,17 +34,25 @@ import {
 export function ForgotPasswordPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<ForgotPasswordFormData>({
-    resolver: zodResolver(forgotPasswordSchema),
-  });
+  const [email, setEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const onSubmit = async (data: ForgotPasswordFormData) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      toast({
+        title: EMAIL_REQUIRED_TITLE,
+        description: EMAIL_REQUIRED_DESCRIPTION,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      await requestPasswordReset(data.email);
+      await requestPasswordReset(trimmedEmail);
       toast({
         title: RESET_LINK_SENT_TITLE,
         description: RESET_LINK_SENT_DESCRIPTION,
@@ -57,6 +65,8 @@ export function ForgotPasswordPage() {
         description: getApiErrorDetail(error),
         variant: 'destructive',
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -66,16 +76,16 @@ export function ForgotPasswordPage() {
         <h1 className={TITLE_STYLES}>{TITLE}</h1>
         <p className={SUBTITLE_STYLES}>{SUBTITLE}</p>
 
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className={FORM_STYLES}>
+        <form onSubmit={handleSubmit} className={FORM_STYLES}>
           <div className={FIELD_STYLES}>
             <Label htmlFor="forgot-password-email">{EMAIL_LABEL}</Label>
             <Input
               id="forgot-password-email"
               type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
               autoComplete="email"
-              {...register('email')}
             />
-            {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
           </div>
 
           <Button type="submit" disabled={isSubmitting} className={SUBMIT_BUTTON_STYLES}>

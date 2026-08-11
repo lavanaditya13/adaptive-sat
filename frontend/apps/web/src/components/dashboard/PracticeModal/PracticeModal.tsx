@@ -9,18 +9,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@workspace/ui/components/dialog';
-import { Alert, AlertTitle, AlertDescription } from '@workspace/ui/components/alert';
+import { Alert, AlertDescription } from '@workspace/ui/components/alert';
 import { Skeleton } from '@workspace/ui/components/skeleton';
 import { Button } from '@workspace/ui/components/button';
 import { PracticeOptionCard } from '@/components/practice/PracticeOptionCard/PracticeOptionCard';
 import { TopicListItem } from '@/components/practice/TopicListItem/TopicListItem';
 import { getSectionTheme } from '@/constants/section-theme';
-import {
-  selectSection,
-  startPractice,
-  abandonPractice,
-  type StartPracticePayload,
-} from '@/services/practice-service';
+import { selectSection, startPractice, type StartPracticePayload } from '@/services/practice-service';
 import { queryKeys } from '@/constants/query-keys';
 import { ROUTES } from '@/constants/routes';
 import type { ApiErrorResponse, PracticeOption } from '@/types/api';
@@ -32,11 +27,6 @@ import {
   ERROR_MESSAGE,
   RETRY_BUTTON_TEXT,
   DEFAULT_403_ERROR,
-  SESSION_CONFLICT_TITLE,
-  SESSION_CONFLICT_DESCRIPTION,
-  RESUME_SESSION_LABEL,
-  START_OVER_LABEL,
-  ABANDON_ERROR_MESSAGE,
 } from './PracticeModal.constants';
 import {
   CONTENT_STYLES,
@@ -44,10 +34,10 @@ import {
   ICON_BADGE_STYLES,
   OPTIONS_LIST_STYLES,
   BACK_LINK_STYLES,
+  RETRY_BUTTON_STYLES,
   TOPICS_LIST_STYLES,
   SKELETON_ROW_STYLES,
   SKELETON_LIST_STYLES,
-  CONFLICT_ACTIONS_STYLES,
 } from './PracticeModal.styles';
 
 interface Section {
@@ -69,10 +59,6 @@ export function PracticeModal({ section, open, onOpenChange }: PracticeModalProp
   const [view, setView] = useState<ModalView>('options');
   const [startError, setStartError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
-  const [conflictRequest, setConflictRequest] = useState<{
-    mode: StartPracticePayload['mode'];
-    topicId?: number;
-  } | null>(null);
 
   const sectionId = section?.section_id ?? 0;
 
@@ -93,7 +79,6 @@ export function PracticeModal({ section, open, onOpenChange }: PracticeModalProp
 
   const handleStartPractice = async (mode: StartPracticePayload['mode'], topicId?: number) => {
     setStartError(null);
-    setConflictRequest(null);
     setIsStarting(true);
     try {
       await startPractice({
@@ -105,12 +90,7 @@ export function PracticeModal({ section, open, onOpenChange }: PracticeModalProp
       navigate(ROUTES.PRACTICE);
     } catch (err: unknown) {
       if (axios.isAxiosError<ApiErrorResponse>(err)) {
-        if (err.response?.status === 409) {
-          // A session is already in progress for this student. Rather than
-          // dead-ending here, let them resume it (it's still reachable via
-          // GET /practice/question) or explicitly abandon it and retry.
-          setConflictRequest({ mode: topicId ? 'topic' : mode, topicId });
-        } else if (err.response?.status === 403) {
+        if (err.response?.status === 403) {
           setStartError(err.response.data?.detail || DEFAULT_403_ERROR);
         } else {
           setStartError(err.response?.data?.detail || ERROR_MESSAGE);
@@ -121,27 +101,6 @@ export function PracticeModal({ section, open, onOpenChange }: PracticeModalProp
     } finally {
       setIsStarting(false);
     }
-  };
-
-  const handleResumeSession = () => {
-    onOpenChange(false);
-    navigate(ROUTES.PRACTICE);
-  };
-
-  const handleStartOver = async () => {
-    if (!conflictRequest) return;
-
-    setIsStarting(true);
-    try {
-      await abandonPractice();
-    } catch {
-      setIsStarting(false);
-      setConflictRequest(null);
-      setStartError(ABANDON_ERROR_MESSAGE);
-      return;
-    }
-
-    await handleStartPractice(conflictRequest.mode, conflictRequest.topicId);
   };
 
   if (!section) {
@@ -177,29 +136,7 @@ export function PracticeModal({ section, open, onOpenChange }: PracticeModalProp
           </div>
         </DialogHeader>
 
-        {conflictRequest && (
-          <Alert variant="destructive">
-            <AlertTitle>{SESSION_CONFLICT_TITLE}</AlertTitle>
-            <AlertDescription>
-              {SESSION_CONFLICT_DESCRIPTION}
-              <div className={CONFLICT_ACTIONS_STYLES}>
-                <Button size="sm" onClick={handleResumeSession} disabled={isStarting}>
-                  {RESUME_SESSION_LABEL}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleStartOver}
-                  disabled={isStarting}
-                >
-                  {START_OVER_LABEL}
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {!conflictRequest && startError && (
+        {startError && (
           <Alert variant="destructive">
             <AlertDescription>{startError}</AlertDescription>
           </Alert>
@@ -217,7 +154,7 @@ export function PracticeModal({ section, open, onOpenChange }: PracticeModalProp
           <Alert variant="destructive">
             <AlertDescription>
               {ERROR_MESSAGE}
-              <Button variant="outline" size="sm" className="ml-4" onClick={() => refetch()}>
+              <Button variant="outline" size="sm" className={RETRY_BUTTON_STYLES} onClick={() => refetch()}>
                 {RETRY_BUTTON_TEXT}
               </Button>
             </AlertDescription>
