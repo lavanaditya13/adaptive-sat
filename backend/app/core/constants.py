@@ -39,6 +39,37 @@ ACTIVE_PRACTICE_SESSION_STATUSES = (
 PRACTICE_SESSION_QUESTION_STATUS_ASSIGNED = "assigned"
 PRACTICE_SESSION_QUESTION_STATUS_ANSWERED = "answered"
 
+# --- IdempotencyKey -----------------------------------------------------------
+class IdempotentEndpoint(str, Enum):
+    """Scopes an Idempotency-Key to the specific endpoint it was sent to, so
+    the same client-generated key reused (by mistake) across two different
+    actions can't collide with -- or replay the response of -- each other.
+    """
+
+    PRACTICE_START = "practice_start"
+    PRACTICE_ANSWER = "practice_answer"
+
+
+class IdempotencyKeyStatus(str, Enum):
+    """The model column is typed with this enum (see
+    app/models/idempotency_key.py) and backed by a CHECK constraint (see
+    alembic revision the model's docstring points to), same pattern as
+    PracticeSessionStatus above.
+    """
+
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+
+IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
+
+IDEMPOTENCY_KEY_IN_PROGRESS_DETAIL = (
+    "A request with this Idempotency-Key is already being processed. Retry shortly."
+)
+IDEMPOTENCY_KEY_REUSED_DETAIL = (
+    "This Idempotency-Key was already used for a request with a different body."
+)
+
 # --- Shared error-detail strings --------------------------------------------
 SESSION_ALREADY_IN_PROGRESS_DETAIL = (
     "A practice session is already in progress for this student."

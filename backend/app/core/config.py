@@ -45,6 +45,16 @@ class Settings(BaseSettings):
     # instead of permanently blocking them with a 409.
     PRACTICE_SESSION_STALE_MINUTES: int = 180
 
+    # An Idempotency-Key reservation stuck "in_progress" for longer than this
+    # (see app/services/idempotency_service.py) is treated as abandoned --
+    # the request that created it was presumably killed mid-flight (per
+    # database.py's NullPool comment on Vercel/Neon) rather than ever
+    # finishing -- so a retry with the same key can reclaim it and actually
+    # run, instead of getting stuck behind a 409 forever. Short window:
+    # recovering from one killed request, not tracking a long-lived session
+    # like PRACTICE_SESSION_STALE_MINUTES above.
+    IDEMPOTENCY_KEY_STALE_MINUTES: int = 5
+
     # Security
     SECRET_KEY: str = "change-this-secret-key"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24

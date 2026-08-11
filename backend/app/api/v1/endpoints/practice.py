@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.constants import IDEMPOTENCY_KEY_HEADER, IdempotentEndpoint
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
@@ -17,6 +18,7 @@ from app.schemas.practice import (
     UpdateAttemptRequest,
     UpdateAttemptResponse,
 )
+from app.services.idempotency_service import compute_request_fingerprint, run_idempotent
 from app.services.practice_service import (
     abandon_practice_session,
     complete_practice_session,
@@ -45,8 +47,17 @@ async def start_practice(
     request: PracticeStartRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias=IDEMPOTENCY_KEY_HEADER),
 ):
-    return await start_practice_session(db=db, request=request, student=current_user)
+    return await run_idempotent(
+        db,
+        student_id=current_user.id,
+        endpoint=IdempotentEndpoint.PRACTICE_START,
+        idempotency_key=idempotency_key,
+        request_fingerprint=compute_request_fingerprint(request),
+        response_model=PracticeStartResponse,
+        execute=lambda: start_practice_session(db=db, request=request, student=current_user),
+    )
 
 
 @router.post("/abandon", response_model=PracticeAbandonResponse)
@@ -62,8 +73,17 @@ async def answer_question(
     request: SubmitAnswerRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias=IDEMPOTENCY_KEY_HEADER),
 ):
-    return await submit_answer(db=db, student=current_user, request=request)
+    return await run_idempotent(
+        db,
+        student_id=current_user.id,
+        endpoint=IdempotentEndpoint.PRACTICE_ANSWER,
+        idempotency_key=idempotency_key,
+        request_fingerprint=compute_request_fingerprint(request),
+        response_model=SubmitAnswerResponse,
+        execute=lambda: submit_answer(db=db, student=current_user, request=request),
+    )
 
 
 @router.get("/question", response_model=PracticeQuestionResponse)
