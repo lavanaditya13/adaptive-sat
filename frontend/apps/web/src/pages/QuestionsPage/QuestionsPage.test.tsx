@@ -101,6 +101,7 @@ describe('QuestionsPage', () => {
       saved: true,
       answered_position: 1,
       remaining_questions: 2,
+      attempt_id: 501,
     });
     const user = userEvent.setup();
 
@@ -136,6 +137,7 @@ describe('QuestionsPage', () => {
       saved: true,
       answered_position: 1,
       remaining_questions: 2,
+      attempt_id: 502,
     });
     const user = userEvent.setup();
 
@@ -167,6 +169,7 @@ describe('QuestionsPage', () => {
       saved: true,
       answered_position: 1,
       remaining_questions: 2,
+      attempt_id: 503,
     });
     const user = userEvent.setup();
 
@@ -203,6 +206,7 @@ describe('QuestionsPage', () => {
       saved: true,
       answered_position: 1,
       remaining_questions: 0,
+      attempt_id: 504,
     });
     vi.mocked(completePractice).mockResolvedValue(MOCK_COMPLETE_RESPONSE);
     const user = userEvent.setup();
