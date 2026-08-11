@@ -24,6 +24,7 @@ export const API = {
        Takes ?section=math|reading_writing; omitted falls back to the
        student's last SELECT_SECTION choice. Responds in camelCase. */
     SKILL_TREE: '/api/v1/practice/skill-tree',
+    ATTEMPT_UPDATE: (id: number) => `/api/v1/practice/attempts/${id}`,
   },
   SETTINGS: {
     CONNECTED_PROVIDERS: '/api/v1/settings/connected-providers',

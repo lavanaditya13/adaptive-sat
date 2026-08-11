@@ -36,6 +36,22 @@ class Topic(Base):
         nullable=True,
     )
 
+    # SAT section this topic's domain belongs to (math / reading_writing —
+    # see app.core.constants.SECTION_MATH / SECTION_READING_WRITING). Every
+    # topic created going forward must set this (enforced by TopicCreate,
+    # not a DB constraint — see migration d4a6c2f19b8e docstring for why
+    # this stays nullable at the DB level: a topic with no linked Question
+    # has no source to backfill a value from).
+    section: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        index=True,
+    )
+
+    # Self-reference used to express the College Board domain -> skill
+    # hierarchy: a domain is a Topic with parent_topic_id IS NULL, a skill
+    # is a Topic whose parent_topic_id points at its domain. Existed since
+    # the initial schema but was unused until this hierarchy was wired up.
     parent_topic_id: Mapped[int | None] = mapped_column(
         ForeignKey("topics.id", ondelete="SET NULL"),
         nullable=True,

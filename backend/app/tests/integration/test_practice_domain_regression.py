@@ -19,6 +19,7 @@ behavior belongs in the matching tests/services/test_*.py file instead.
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 import pytest
@@ -301,3 +302,66 @@ async def test_adaptive_unlock_after_three_completed_section_sessions(student, s
     adaptive_option = next(option for option in selection.practice_options if option.mode == "adaptive")
     assert adaptive_option.is_locked is False
     assert adaptive_option.unlock_requirement is None
+
+
+@pytest.mark.asyncio
+async def test_concurrent_submit_answer_does_not_double_count_or_skip(student, seeded_questions):
+    """Two overlapping submit_answer calls for the same session (a
+    double-clicked "Next", or a retried request) used to both read the same
+    next-assigned PracticeSessionQuestion before either wrote back -- see
+    practice_service._get_next_assigned_question's for_update lock. Fires
+    both concurrently, against real separate connections/transactions, so
+    the lock actually has something to serialize.
+    """
+    await _select_math_section(student)
+
+    async with _request_scoped_session() as db:
+        await practice_service.start_practice_session(
+            db, PracticeStartRequest(mode="section", question_count=1), student
+        )
+
+    async def _submit():
+        async with _request_scoped_session() as db:
+            return await practice_service.submit_answer(
+                db,
+                student,
+                SubmitAnswerRequest(
+                    selected_answer=CORRECT_ANSWER, time_spent_seconds=10, confidence_level=3
+                ),
+            )
+
+    results = await asyncio.gather(_submit(), _submit(), return_exceptions=True)
+
+    successes = [r for r in results if isinstance(r, practice_service.SubmitAnswerResponse)]
+    failures = [r for r in results if isinstance(r, HTTPException)]
+
+    assert len(successes) == 1, f"expected exactly one submission to win the race, got {results}"
+    assert len(failures) == 1
+    # Blocked by the row lock until the winner commits, the loser re-reads
+    # the now-"answered" row, finds no next question, and gets the same 400
+    # a legitimate late submit_answer call would -- not a 409 from racing
+    # the winner to insert an Attempt (the pre-existing unique-index path).
+    assert failures[0].status_code == 400
+
+    async with SessionLocal() as db:
+        attempts = (
+            await db.execute(select(Attempt).where(Attempt.student_id == student.id))
+        ).scalars().all()
+        assert len(attempts) == 1  # no double-count
+
+        session_row = (
+            await db.execute(select(PracticeSession).where(PracticeSession.student_id == student.id))
+        ).scalar_one()
+        # The one question got answered, not left stranded "assigned" --
+        # and the session correctly advanced instead of getting stuck
+        # in_progress with nothing left to answer.
+        assert session_row.status == "ready_to_complete"
+
+        session_question = (
+            await db.execute(
+                select(PracticeSessionQuestion).where(
+                    PracticeSessionQuestion.practice_session_id == session_row.id
+                )
+            )
+        ).scalar_one()
+        assert session_question.status == "answered"  # no skipped question

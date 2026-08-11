@@ -12,17 +12,22 @@ from app.schemas.practice import (
     PracticeStartResponse,
     SectionSelectionRequest,
     SectionSelectionResponse,
+    SkillTreeResponse,
     SubmitAnswerRequest,
     SubmitAnswerResponse,
+    UpdateAttemptRequest,
+    UpdateAttemptResponse,
 )
 from app.services.practice_service import (
     abandon_practice_session,
     complete_practice_session,
     get_current_question,
     get_next_question,
+    get_skill_tree,
     set_selected_section,
     start_practice_session,
     submit_answer,
+    update_attempt_answer,
 )
 
 router = APIRouter()
@@ -52,6 +57,15 @@ async def abandon_session(
     db: AsyncSession = Depends(get_db),
 ):
     return await abandon_practice_session(db=db, student=current_user)
+
+
+@router.get("/skill-tree", response_model=SkillTreeResponse)
+async def skill_tree(
+    section: str | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_skill_tree(db=db, student=current_user, section=section)
 
 
 @router.post("/answer", response_model=SubmitAnswerResponse)
@@ -86,3 +100,15 @@ async def complete_session(
     db: AsyncSession = Depends(get_db),
 ):
     return await complete_practice_session(db=db, student=current_user)
+
+
+@router.put("/attempts/{attempt_id}", response_model=UpdateAttemptResponse)
+async def update_attempt(
+    attempt_id: int,
+    request: UpdateAttemptRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await update_attempt_answer(
+        db=db, student=current_user, attempt_id=attempt_id, request=request
+    )

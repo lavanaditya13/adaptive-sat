@@ -158,6 +158,7 @@ export const MOCK_ANSWER_RESPONSE: AnswerResponse = {
   saved: true,
   answered_position: 1,
   remaining_questions: 2,
+  attempt_id: 1,
 };
 
 export const MOCK_QUESTION_RESPONSE: QuestionResponse = {

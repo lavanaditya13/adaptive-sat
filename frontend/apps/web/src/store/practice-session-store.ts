@@ -4,8 +4,9 @@ import type { Question } from '@/types/api';
 interface AnsweredQuestion {
   position: number;
   question: Question;
-  selectedAnswer: string;
+  selectedAnswer: string | null;
   confidenceLevel: number;
+  attemptId: number;
 }
 
 interface PracticeSessionState {
@@ -23,6 +24,7 @@ interface PracticeSessionState {
   setConfidenceLevel: (level: number) => void;
   setTimeSpentSeconds: (seconds: number) => void;
   pushAnsweredQuestion: (entry: AnsweredQuestion) => void;
+  updateAnsweredQuestion: (position: number, newAnswer: string | null) => void;
   setReviewIndex: (index: number | null) => void;
   resetSession: () => void;
 }
@@ -55,6 +57,13 @@ export const usePracticeSessionStore = create<PracticeSessionState>((set) => ({
   pushAnsweredQuestion: (entry) =>
     set((state) => ({ answeredHistory: [...state.answeredHistory, entry] })),
 
+  updateAnsweredQuestion: (position, newAnswer) =>
+    set((state) => ({
+      answeredHistory: state.answeredHistory.map((entry) =>
+        entry.position === position ? { ...entry, selectedAnswer: newAnswer } : entry
+      ),
+    })),
+
   setReviewIndex: (reviewIndex) => set({ reviewIndex }),
 
   resetSession: () =>
@@ -69,3 +78,5 @@ export const usePracticeSessionStore = create<PracticeSessionState>((set) => ({
       reviewIndex: null,
     }),
 }));
+
+export type { AnsweredQuestion };
