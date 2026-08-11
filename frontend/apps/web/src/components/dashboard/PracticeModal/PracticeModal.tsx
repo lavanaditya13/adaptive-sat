@@ -22,7 +22,7 @@ import {
   type StartPracticePayload,
 } from '@/services/practice-service';
 import { queryKeys } from '@/constants/query-keys';
-import { ROUTES } from '@/constants/routes';
+import { practicePath } from '@/constants/routes';
 import type { ApiErrorResponse, PracticeOption } from '@/types/api';
 import {
   SUBTITLE_CHOOSE_MODE,
@@ -102,7 +102,7 @@ export function PracticeModal({ section, open, onOpenChange }: PracticeModalProp
         topic_id: topicId,
       });
       onOpenChange(false);
-      navigate(ROUTES.PRACTICE);
+      navigate(practicePath.session());
     } catch (err: unknown) {
       if (axios.isAxiosError<ApiErrorResponse>(err)) {
         if (err.response?.status === 409) {
@@ -125,7 +125,7 @@ export function PracticeModal({ section, open, onOpenChange }: PracticeModalProp
 
   const handleResumeSession = () => {
     onOpenChange(false);
-    navigate(ROUTES.PRACTICE);
+    navigate(practicePath.session());
   };
 
   const handleStartOver = async () => {

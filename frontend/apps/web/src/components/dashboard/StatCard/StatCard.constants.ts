@@ -1,3 +1,4 @@
-export const SESSIONS_COMPLETED_LABEL = 'Sessions Completed';
-export const QUESTIONS_ANSWERED_LABEL = 'Questions Answered';
-export const ACCURACY_PERCENTAGE_LABEL = 'Accuracy';
+/** Accent family a stat card is tinted with (border, icon tile, value colour). */
+export type StatTone = 'success' | 'math' | 'reading' | 'streak';
+
+export const ICON_SIZE = 15;
