@@ -9,7 +9,9 @@ export const EMAIL_LABEL = 'Email';
 export const EMAIL_HELPER = 'Used to sign in — change it from Linked accounts below';
 export const UNSAVED_CHANGES_LABEL = 'You have unsaved changes';
 export const SAVE_CHANGES_LABEL = 'Save changes';
+export const SAVING_CHANGES_LABEL = 'Saving…';
 export const PROFILE_UPDATED_TOAST = 'Profile updated.';
+export const PROFILE_SAVE_ERROR_MESSAGE = "Couldn't save your profile. Please try again.";
 
 export const LINKED_ACCOUNTS_TITLE = 'Linked accounts';
 export const LINKED_ACCOUNTS_SUBTITLE = 'Manage the accounts you use to sign in';
