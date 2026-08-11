@@ -1,34 +1,38 @@
 import type { LucideIcon } from 'lucide-react';
-import { Card } from '@workspace/ui/components/card';
+import type { StatTone } from './StatCard.constants';
 import {
+  CAPTION_STYLES,
   CARD_STYLES,
   HEADER_ROW_STYLES,
+  ICON_STYLES,
+  ICON_TILE_STYLES,
   LABEL_STYLES,
-  ICON_BADGE_STYLES,
+  TONE_STYLES,
   VALUE_STYLES,
-  SUBTEXT_STYLES,
 } from './StatCard.styles';
 
 interface StatCardProps {
   label: string;
   value: string | number;
-  icon?: LucideIcon;
-  subtext?: string;
+  icon: LucideIcon;
+  tone: StatTone;
+  caption?: string;
 }
 
-export function StatCard({ label, value, icon: Icon, subtext }: StatCardProps) {
+/** Single tinted metric tile in the dashboard stat grid. */
+export function StatCard({ label, value, icon: Icon, tone, caption }: StatCardProps) {
+  const toneStyles = TONE_STYLES[tone];
+
   return (
-    <Card className={CARD_STYLES}>
+    <div className={`${CARD_STYLES} ${toneStyles.border}`}>
       <div className={HEADER_ROW_STYLES}>
         <p className={LABEL_STYLES}>{label}</p>
-        {Icon && (
-          <span className={ICON_BADGE_STYLES}>
-            <Icon className="size-4" />
-          </span>
-        )}
+        <span className={`${ICON_TILE_STYLES} ${toneStyles.tile}`} aria-hidden="true">
+          <Icon className={ICON_STYLES} strokeWidth={2} />
+        </span>
       </div>
-      <p className={VALUE_STYLES}>{value}</p>
-      {subtext && <p className={SUBTEXT_STYLES}>{subtext}</p>}
-    </Card>
+      <p className={`${VALUE_STYLES} ${toneStyles.value}`}>{value}</p>
+      {caption && <p className={CAPTION_STYLES}>{caption}</p>}
+    </div>
   );
 }
