@@ -1,7 +1,7 @@
 """constrain attempts.confidence_level to the 1-5 rating scale
 
 Revision ID: d4f2a7c1b8e5
-Revises: 3ba3aae2a43a
+Revises: f3a7c1e9d5b2
 Create Date: 2026-08-10 00:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "d4f2a7c1b8e5"
-down_revision: Union[str, Sequence[str], None] = "3ba3aae2a43a"
+down_revision: Union[str, Sequence[str], None] = "f3a7c1e9d5b2"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
