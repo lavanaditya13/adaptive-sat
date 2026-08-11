@@ -9,6 +9,35 @@ from app.models.question import Question
 from app.models.topic import Topic
 
 
+# A node counts as mastered at >= 85% accuracy over at least 10 attempted
+# questions. The minimum matters as much as the percentage: without it a
+# single lucky correct answer reads as 100% and a node flips to "mastered"
+# off one data point.
+MASTERY_ACCURACY_PERCENT = 85
+MASTERY_MIN_QUESTIONS = 10
+
+# Questions whose `skill` is NULL (older seed rows tagged only to a domain)
+# still have to appear somewhere, or a domain's skill rows won't add up to
+# the domain's own totals. They're collected under this bucket.
+UNCATEGORIZED_SKILL_NAME = "General"
+
+
+def accuracy_percent(correct: int, attempted: int) -> int:
+    """Accuracy as a whole percent. The skill tree renders integers, so the
+    rounding happens once here instead of at each call site."""
+    if not attempted:
+        return 0
+
+    return round(correct / attempted * 100)
+
+
+def is_mastered(correct: int, attempted: int) -> bool:
+    if attempted < MASTERY_MIN_QUESTIONS:
+        return False
+
+    return accuracy_percent(correct, attempted) >= MASTERY_ACCURACY_PERCENT
+
+
 def classify_mistake_type(
     selected_answer: str | None,
     is_correct: bool,
@@ -135,6 +164,139 @@ async def compute_section_accuracy(db: AsyncSession, student_id: int) -> dict[st
         }
         for section, stats in section_stats.items()
     }
+
+
+def _skill_sort_key(skill_name: str) -> tuple[int, str]:
+    # Alphabetical, with the catch-all bucket pinned to the bottom so it
+    # never sorts into the middle of the real skill names.
+    return (1 if skill_name == UNCATEGORIZED_SKILL_NAME else 0, skill_name)
+
+
+def build_skill_tree(
+    curriculum_rows: list[tuple[int, str, str, str | None]],
+    attempt_rows: list[tuple[int, str | None, bool]],
+) -> list[dict]:
+    """Folds a section's question catalogue and a student's attempts into
+    the domain -> skill accuracy tree.
+
+    `curriculum_rows` are distinct (topic_id, topic_code, topic_name, skill)
+    tuples covering every question in the section; `attempt_rows` are
+    (topic_id, skill, is_correct) tuples for that student's attempts in the
+    same section. The catalogue drives the shape, so domains and skills the
+    student has never touched still appear at 0% with 0 attempted — the UI
+    lists the whole curriculum, not just what's been practised.
+
+    Split out from get_section_skill_tree as a pure function so the folding
+    rules can be tested without a database.
+    """
+    domains: dict[int, dict] = {}
+
+    def _ensure_domain(topic_id: int, topic_code: str, topic_name: str) -> dict:
+        return domains.setdefault(
+            topic_id,
+            {
+                "topic_code": topic_code,
+                "name": topic_name,
+                "attempted": 0,
+                "correct": 0,
+                "skills": {},
+            },
+        )
+
+    def _ensure_skill(domain: dict, skill_name: str) -> dict:
+        return domain["skills"].setdefault(skill_name, {"attempted": 0, "correct": 0})
+
+    for topic_id, topic_code, topic_name, skill in curriculum_rows:
+        domain = _ensure_domain(topic_id, topic_code, topic_name)
+        _ensure_skill(domain, skill or UNCATEGORIZED_SKILL_NAME)
+
+    for topic_id, skill, is_correct in attempt_rows:
+        domain = domains.get(topic_id)
+
+        if domain is None:
+            # Only reachable if a question moved out of this section after
+            # being attempted; nothing sensible to attach it to.
+            continue
+
+        skill_stats = _ensure_skill(domain, skill or UNCATEGORIZED_SKILL_NAME)
+
+        domain["attempted"] += 1
+        skill_stats["attempted"] += 1
+
+        if is_correct:
+            domain["correct"] += 1
+            skill_stats["correct"] += 1
+
+    ordered_domains = sorted(domains.values(), key=lambda domain: domain["name"])
+
+    tree: list[dict] = []
+
+    # topic_id is the 1-based position within the section, matching the
+    # identifier _load_section_topics hands out and start_practice_session
+    # expects — both order by topic name, so the positions line up.
+    for position, domain in enumerate(ordered_domains, start=1):
+        skills = [
+            {
+                "name": skill_name,
+                "accuracy": accuracy_percent(stats["correct"], stats["attempted"]),
+                "questions_attempted": stats["attempted"],
+                "questions_correct": stats["correct"],
+                "mastered": is_mastered(stats["correct"], stats["attempted"]),
+            }
+            for skill_name, stats in sorted(
+                domain["skills"].items(),
+                key=lambda item: _skill_sort_key(item[0]),
+            )
+        ]
+
+        tree.append(
+            {
+                "name": domain["name"],
+                "topic_id": position,
+                "topic_code": domain["topic_code"],
+                "accuracy": accuracy_percent(domain["correct"], domain["attempted"]),
+                "questions_attempted": domain["attempted"],
+                "questions_correct": domain["correct"],
+                "mastered": is_mastered(domain["correct"], domain["attempted"]),
+                "skills": skills,
+            }
+        )
+
+    return tree
+
+
+async def get_section_skill_tree(
+    db: AsyncSession,
+    student_id: int,
+    section_code: str,
+) -> list[dict]:
+    """Per-domain and per-skill accuracy for one student in one section.
+
+    Deliberately reads the same Attempt table get_student_progress does,
+    just grouped one level finer (Question.skill under Topic) and scoped to
+    a section, so the tree can never disagree with the topic accuracy the
+    dashboard and study plan are built from.
+    """
+    curriculum_result = await db.execute(
+        select(Topic.id, Topic.code, Topic.name, Question.skill)
+        .join(Question, Question.topic_id == Topic.id)
+        .where(Question.section == section_code)
+        .distinct()
+    )
+
+    attempts_result = await db.execute(
+        select(Question.topic_id, Question.skill, Attempt.is_correct)
+        .join(Question, Question.id == Attempt.question_id)
+        .where(
+            Attempt.student_id == student_id,
+            Question.section == section_code,
+        )
+    )
+
+    return build_skill_tree(
+        curriculum_rows=list(curriculum_result.all()),
+        attempt_rows=list(attempts_result.all()),
+    )
 
 
 def compute_avg_session_minutes(
