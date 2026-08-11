@@ -39,6 +39,8 @@ from app.schemas.practice import (
     SectionSelectionResponse,
     SkillTreeResponse,
     TopicActionItem,
+    TopicMasteryResponse,
+    TopicsResponse,
     UnlockRequirement,
     PublicQuestionResponse,
     ScoreSummary,
@@ -272,6 +274,62 @@ async def get_skill_tree(
         ),
         domains=[DomainNodeResponse(**domain) for domain in domains],
     )
+
+
+async def get_topics_overview(db: AsyncSession, student: User) -> TopicsResponse:
+    """Every domain-level topic across every section, each self-reporting
+    its own section, for GET /api/v1/topics.
+
+    Unlike get_skill_tree (one section per call, with `section` only known
+    from the response wrapper), this covers every section in a single
+    response -- for views that need the whole curriculum at once and can't
+    rely on the caller already knowing which section a given topic belongs
+    to. Closes the gap flagged in WeakTopicsList.tsx ("weak_topics has no
+    section_id, so it can't deep-link into topic practice yet").
+
+    Reuses get_section_skill_tree per section rather than a separate query,
+    so a topic's accuracy here can never disagree with the mastery view or
+    dashboard, and gets the same "untouched topics still appear" guarantee
+    build_skill_tree already provides -- nothing is omitted just because a
+    student hasn't attempted it (see TopicMasteryResponse.started).
+    `topic_id` keeps the same section-scoped positional semantics
+    DomainNodeResponse.topic_id uses, so it can be passed straight through
+    as POST /practice/start's `topic_id`.
+
+    Doesn't yet reflect Topic.parent_topic_id nesting: get_section_skill_tree
+    groups directly by whatever Topic a Question points to, without rolling
+    a skill-level Topic's questions up under its parent domain. Real
+    parent/child rows depend on SCRUM-28's seed_cb_topics.py, which hasn't
+    landed yet -- until it does every Topic is flat (parent_topic_id is
+    always NULL), so this is a known follow-up, not something silently
+    assumed to already work.
+    """
+    topics: list[TopicMasteryResponse] = []
+
+    for section_code in SECTION_CODES.values():
+        domains = await get_section_skill_tree(
+            db=db,
+            student_id=student.id,
+            section_code=section_code,
+        )
+
+        for domain in domains:
+            topics.append(
+                TopicMasteryResponse(
+                    topic_id=domain["topic_id"],
+                    topic_code=domain["topic_code"],
+                    name=domain["name"],
+                    section=section_code,
+                    section_display_name=SECTION_DISPLAY_NAMES[section_code],
+                    accuracy=domain["accuracy"],
+                    questions_attempted=domain["questions_attempted"],
+                    questions_correct=domain["questions_correct"],
+                    mastered=domain["mastered"],
+                    started=domain["questions_attempted"] > 0,
+                )
+            )
+
+    return TopicsResponse(topics=topics)
 
 
 def _public_question(question: Question, question_id: int) -> PublicQuestionResponse:

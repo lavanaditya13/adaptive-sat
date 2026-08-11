@@ -233,3 +233,46 @@ class SkillTreeResponse(_SkillTreeNode):
     section_display_name: str
     mastery_rule: MasteryRuleResponse
     domains: list[DomainNodeResponse] = []
+
+
+class TopicMasteryResponse(BaseModel):
+    """One deep-linkable topic (a domain -- see Topic.parent_topic_id) with
+    this student's mastery for it and its own section attached, for GET
+    /api/v1/topics.
+
+    Unlike SkillTreeResponse (one section per call, `section` only known
+    from the response wrapper), this spans every section in a single
+    response, so each item has to self-report its own `section`/
+    `section_display_name` for a client to group by -- the gap flagged in
+    WeakTopicsList.tsx ("weak_topics has no section_id, so it can't
+    deep-link into topic practice").
+
+    `topic_id` deliberately carries the same section-scoped positional
+    semantics as DomainNodeResponse.topic_id (see that field's docstring),
+    not the Topic primary key, so it can be passed straight through as
+    POST /practice/start's `topic_id`. Plain snake_case rather than
+    _SkillTreeNode's camelCase: this feeds the rest of this module's
+    dashboard-family consumers (e.g. DashboardWeakTopicResponse below), not
+    the camelCase-specific mastery view.
+
+    `started` is explicit rather than left for the client to infer from
+    `questions_attempted == 0`, since a topic can also sit at 0% accuracy
+    after real (if entirely wrong) attempts -- those two states have to
+    stay distinguishable per the topics-endpoint "not started" acceptance
+    criterion.
+    """
+
+    topic_id: int
+    topic_code: str
+    name: str
+    section: str
+    section_display_name: str
+    accuracy: int
+    questions_attempted: int
+    questions_correct: int
+    mastered: bool
+    started: bool
+
+
+class TopicsResponse(BaseModel):
+    topics: list[TopicMasteryResponse] = []
