@@ -14,11 +14,8 @@ from app.core.constants import (
     ACTIVE_PRACTICE_SESSION_STATUSES,
     PRACTICE_SESSION_QUESTION_STATUS_ANSWERED,
     PRACTICE_SESSION_QUESTION_STATUS_ASSIGNED,
-    PRACTICE_SESSION_STATUS_ABANDONED,
-    PRACTICE_SESSION_STATUS_COMPLETED,
-    PRACTICE_SESSION_STATUS_IN_PROGRESS,
-    PRACTICE_SESSION_STATUS_READY_TO_COMPLETE,
     SESSION_ALREADY_IN_PROGRESS_DETAIL,
+    PracticeSessionStatus,
 )
 from app.models.attempt import Attempt
 from app.models.practice_context import PracticeContext
@@ -110,7 +107,7 @@ async def _count_completed_section_sessions(
             PracticeSession.student_id == student_id,
             PracticeSession.section_id == section_id,
             PracticeSession.mode == "section",
-            PracticeSession.status == PRACTICE_SESSION_STATUS_COMPLETED,
+            PracticeSession.status == PracticeSessionStatus.COMPLETED,
         )
     )
     return result.scalar_one()
@@ -324,8 +321,10 @@ def _is_session_stale(session: PracticeSession, last_attempt_at: datetime | None
 async def _get_next_assigned_question(
     db: AsyncSession,
     session_id: int,
+    *,
+    for_update: bool = False,
 ) -> PracticeSessionQuestion | None:
-    result = await db.execute(
+    query = (
         select(PracticeSessionQuestion)
         .where(
             PracticeSessionQuestion.practice_session_id == session_id,
@@ -334,6 +333,22 @@ async def _get_next_assigned_question(
         .order_by(PracticeSessionQuestion.position.asc())
         .limit(1)
     )
+
+    # submit_answer passes for_update=True: it reads this row, mutates its
+    # status, then re-counts remaining assigned rows to decide whether the
+    # session is ready to complete — three round trips with nothing stopping
+    # two concurrent calls (a double-clicked "Next", a retried request) from
+    # both reading the row as still "assigned" before either writes back.
+    # The row lock serializes them: the second call blocks here until the
+    # first commits, then re-reads the now-"answered" row and (since it no
+    # longer matches the WHERE clause) correctly finds nothing to grab
+    # instead of racing the first to mutate/recount the same row. Read-only
+    # callers (get_current_question, start_practice_session) don't need
+    # this and pass the default.
+    if for_update:
+        query = query.with_for_update()
+
+    result = await db.execute(query)
 
     return result.scalar_one_or_none()
 
@@ -380,7 +395,7 @@ async def start_practice_session(
         # it rather than leaving the student permanently locked out. A student
         # who explicitly wants to abandon a fresh session should use
         # abandon_practice_session instead of waiting for this to kick in.
-        active_session.status = PRACTICE_SESSION_STATUS_ABANDONED
+        active_session.status = PracticeSessionStatus.ABANDONED
         await db.flush()
 
     question_count = request.question_count or settings.DEFAULT_PRACTICE_QUESTION_COUNT
@@ -447,7 +462,7 @@ async def start_practice_session(
         .join(PracticeSession, PracticeSession.id == Attempt.practice_session_id)
         .where(
             Attempt.student_id == student.id,
-            PracticeSession.status == PRACTICE_SESSION_STATUS_COMPLETED,
+            PracticeSession.status == PracticeSessionStatus.COMPLETED,
         )
         .scalar_subquery()
     )
@@ -484,7 +499,7 @@ async def start_practice_session(
         title=f"{request.mode.title()} Practice Session",
         mode=request.mode,
         question_count=len(questions),
-        status=PRACTICE_SESSION_STATUS_IN_PROGRESS,
+        status=PracticeSessionStatus.IN_PROGRESS,
     )
 
     db.add(session)
@@ -573,12 +588,12 @@ async def get_current_question(
             )
 
     if session_question is None:
-        if session.status == PRACTICE_SESSION_STATUS_IN_PROGRESS:
-            session.status = PRACTICE_SESSION_STATUS_READY_TO_COMPLETE
+        if session.status == PracticeSessionStatus.IN_PROGRESS:
+            session.status = PracticeSessionStatus.READY_TO_COMPLETE
             await db.commit()
 
         return PracticeQuestionResponse(
-            status=PRACTICE_SESSION_STATUS_READY_TO_COMPLETE,
+            status=PracticeSessionStatus.READY_TO_COMPLETE,
             current_position=None,
             total_questions=session.question_count,
             question=None,
@@ -604,13 +619,15 @@ async def submit_answer(
 ) -> SubmitAnswerResponse:
     session = await _get_active_session_for_student(db=db, student_id=student.id)
 
-    if session.status != PRACTICE_SESSION_STATUS_IN_PROGRESS:
+    if session.status != PracticeSessionStatus.IN_PROGRESS:
         raise HTTPException(
             status_code=400,
             detail="Practice session is not accepting answers",
         )
 
-    session_question = await _get_next_assigned_question(db=db, session_id=session.id)
+    session_question = await _get_next_assigned_question(
+        db=db, session_id=session.id, for_update=True
+    )
 
     if session_question is None:
         raise HTTPException(
@@ -682,7 +699,7 @@ async def submit_answer(
     remaining_questions = remaining_result.scalar_one()
 
     if remaining_questions == 0:
-        session.status = PRACTICE_SESSION_STATUS_READY_TO_COMPLETE
+        session.status = PracticeSessionStatus.READY_TO_COMPLETE
 
     await db.commit()
     await db.refresh(attempt)
@@ -711,7 +728,7 @@ async def abandon_practice_session(
     in start_practice_session to kick in."""
     session = await _get_active_session_for_student(db=db, student_id=student.id)
 
-    session.status = PRACTICE_SESSION_STATUS_ABANDONED
+    session.status = PracticeSessionStatus.ABANDONED
     await db.commit()
 
     return PracticeAbandonResponse(status=session.status)
@@ -746,7 +763,7 @@ async def complete_practice_session(
             PracticeSession.id == session.id,
             PracticeSession.status.in_(ACTIVE_PRACTICE_SESSION_STATUSES),
         )
-        .values(status=PRACTICE_SESSION_STATUS_COMPLETED)
+        .values(status=PracticeSessionStatus.COMPLETED)
     )
 
     if update_result.rowcount == 0:
@@ -756,7 +773,7 @@ async def complete_practice_session(
             detail="This practice session was already completed by a concurrent request.",
         )
 
-    session.status = PRACTICE_SESSION_STATUS_COMPLETED
+    session.status = PracticeSessionStatus.COMPLETED
 
     correct = sum(1 for attempt in attempts if attempt.is_correct)
     incorrect = len(attempts) - correct
@@ -826,7 +843,7 @@ async def complete_practice_session(
     )
 
     return PracticeCompleteResponse(
-        status=PRACTICE_SESSION_STATUS_COMPLETED,
+        status=PracticeSessionStatus.COMPLETED,
         score=ScoreSummary(
             correct=correct,
             incorrect=incorrect,
@@ -853,7 +870,7 @@ async def update_attempt_answer(
         .where(
             Attempt.id == attempt_id,
             Attempt.student_id == student.id,
-            PracticeSession.status == PRACTICE_SESSION_STATUS_IN_PROGRESS,
+            PracticeSession.status == PracticeSessionStatus.IN_PROGRESS,
         )
     )
     attempt = result.scalar_one_or_none()

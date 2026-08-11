@@ -5,6 +5,8 @@ from typing import Any, Literal, Optional
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
+from app.core.constants import PracticeSessionStatus
+
 
 PracticeMode = Literal["adaptive", "topic", "section"]
 
@@ -102,14 +104,14 @@ class PublicQuestionResponse(BaseModel):
 
 
 class PracticeQuestionResponse(BaseModel):
-    status: str
+    status: PracticeSessionStatus
     current_position: Optional[int] = None
     total_questions: int
     question: Optional[PublicQuestionResponse] = None
 
 
 class PracticeStartResponse(BaseModel):
-    status: str
+    status: PracticeSessionStatus
     mode: str
     total_questions: int
     current_position: Optional[int] = None
@@ -117,7 +119,7 @@ class PracticeStartResponse(BaseModel):
 
 
 class PracticeAbandonResponse(BaseModel):
-    status: str
+    status: PracticeSessionStatus
 
 
 class SubmitAnswerRequest(BaseModel):
@@ -179,7 +181,7 @@ class QuestionBreakdownItem(BaseModel):
 
 
 class PracticeCompleteResponse(BaseModel):
-    status: str
+    status: PracticeSessionStatus
     score: ScoreSummary
     adaptive_unlock: Optional[AdaptiveUnlockResponse] = None
     average_confidence: Optional[float] = None
