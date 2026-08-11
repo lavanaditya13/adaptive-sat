@@ -101,8 +101,11 @@ export async function submitAnswer(
   }
 }
 
-// ASSUMPTION (not confirmed by backend): no param returns the active session's current question.
-// Comment this clearly — if wrong, this is the first thing to fix.
+/* Returns the session's next `ASSIGNED` question. The endpoint also takes a
+   `questionId` query param — a 1-based position within the session, not a Question
+   primary key — but it 400s on any position already answered and 404s on one that
+   doesn't exist, so it cannot re-serve past questions. Review is therefore backed by
+   the client-side cache in `use-question-session`, and this call takes no argument. */
 export async function getCurrentQuestion(): Promise<QuestionResponse> {
   try {
     const response = await apiClient.get<QuestionResponse>(API.PRACTICE.QUESTION);
