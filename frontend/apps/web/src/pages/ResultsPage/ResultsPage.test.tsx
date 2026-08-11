@@ -7,7 +7,7 @@ import { ResultsPage } from './ResultsPage';
 import { useResultsStore } from '@/store/results-store';
 import { MOCK_COMPLETE_RESPONSE } from '@/mocks/mock-data';
 import { queryKeys } from '@/constants/query-keys';
-import { BACK_TO_DASHBOARD_BUTTON, START_NEW_PRACTICE_BUTTON } from './ResultsPage.constants';
+import { BACK_TO_DASHBOARD_BUTTON, TRY_AGAIN_BUTTON } from './ResultsPage.constants';
 
 const navigateMock = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -58,7 +58,7 @@ describe('ResultsPage', () => {
       screen.getByText('If 3x + 7 = 22, what is the value of 6x - 4?')
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /back to dashboard/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /practice again/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
   });
 
   it('invalidates the dashboard query cache when clicking "Back to Dashboard"', async () => {
@@ -72,15 +72,16 @@ describe('ResultsPage', () => {
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.dashboard.all });
   });
 
-  it('invalidates the dashboard query cache when clicking "Practice Again"', async () => {
+  it('invalidates the dashboard query cache and routes to the subject\'s practice flow when clicking "Try Again"', async () => {
     const user = userEvent.setup();
     useResultsStore.getState().setLatestResult(MOCK_COMPLETE_RESPONSE);
 
     const { invalidateQueriesSpy } = renderResultsPage();
 
-    await user.click(screen.getByRole('button', { name: START_NEW_PRACTICE_BUTTON }));
+    await user.click(screen.getByRole('button', { name: TRY_AGAIN_BUTTON }));
 
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.dashboard.all });
+    expect(navigateMock).toHaveBeenCalledWith('/practice/math');
   });
 
   it('invalidates the dashboard query cache from the empty state too (e.g. a direct visit with no session in this browser tab)', async () => {
@@ -91,5 +92,37 @@ describe('ResultsPage', () => {
     await user.click(screen.getByRole('button', { name: BACK_TO_DASHBOARD_BUTTON }));
 
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.dashboard.all });
+  });
+
+  it('toggles a question breakdown row open and closed, revealing its explanation', async () => {
+    const user = userEvent.setup();
+    useResultsStore.getState().setLatestResult(MOCK_COMPLETE_RESPONSE);
+
+    renderResultsPage();
+
+    const explanation =
+      'Parallel lines share the same slope. Since the original line has a slope of 4, the parallel line must also have a slope of 4 — only option B matches.';
+    expect(screen.queryByText(explanation)).not.toBeInTheDocument();
+
+    const row = screen.getByText(
+      'Which of the following equations represents a line parallel to y = 4x - 5?'
+    );
+    await user.click(row.closest('button')!);
+    expect(screen.getByText(explanation)).toBeInTheDocument();
+
+    // Clicking the already-open row closes it again.
+    await user.click(row.closest('button')!);
+    expect(screen.queryByText(explanation)).not.toBeInTheDocument();
+  });
+
+  it('renders an em dash instead of a fake 0 or 3 when average_confidence is null', () => {
+    useResultsStore
+      .getState()
+      .setLatestResult({ ...MOCK_COMPLETE_RESPONSE, average_confidence: null });
+
+    renderResultsPage();
+
+    const label = screen.getByText('Avg confidence');
+    expect(label.previousSibling).toHaveTextContent('—');
   });
 });

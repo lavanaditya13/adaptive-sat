@@ -2,16 +2,17 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@workspace/ui/components/button';
 import { Card } from '@workspace/ui/components/card';
-import { ScoreSummary } from '@/components/practice/ScoreSummary/ScoreSummary';
-import { QuestionBreakdownList } from '@/components/practice/QuestionBreakdownList/QuestionBreakdownList';
+import { ResultsSummaryCard } from '@/components/results/ResultsSummaryCard/ResultsSummaryCard';
+import { QuestionBreakdownAccordion } from '@/components/results/QuestionBreakdownAccordion/QuestionBreakdownAccordion';
+import { sumTimeSpentSeconds } from '@/components/results/resultsFormat';
 import { useResultsStore } from '@/store/results-store';
 import { queryKeys } from '@/constants/query-keys';
-import { ROUTES } from '@/constants/routes';
+import { ROUTES, practicePath } from '@/constants/routes';
 import {
   EMPTY_TITLE,
   EMPTY_DESCRIPTION,
   BACK_TO_DASHBOARD_BUTTON,
-  START_NEW_PRACTICE_BUTTON,
+  TRY_AGAIN_BUTTON,
 } from './ResultsPage.constants';
 import {
   CONTAINER_STYLES,
@@ -34,12 +35,22 @@ export function ResultsPage() {
     navigate(ROUTES.DASHBOARD);
   };
 
+  const handleTryAgain = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+    navigate(latestResult?.section ? practicePath.subject(latestResult.section) : ROUTES.PRACTICE);
+  };
+
+  // A completed session's summary lives only in this in-memory store (set by
+  // the practice flow right after POST /practice/complete resolves). There is
+  // no "fetch my last result" endpoint, so a direct/refreshed visit with
+  // nothing in the store is a genuine "no completed session" case, not a
+  // loading or error state - route the student back into practice instead.
   if (!latestResult) {
     return (
       <div className={EMPTY_CONTAINER_STYLES}>
         <Card className={EMPTY_CARD_STYLES}>
-          <h2 className="text-xl font-semibold">{EMPTY_TITLE}</h2>
-          <p className="text-sm text-muted-foreground">{EMPTY_DESCRIPTION}</p>
+          <h2 className="text-lg font-bold text-ink">{EMPTY_TITLE}</h2>
+          <p className="text-sm text-ink-muted">{EMPTY_DESCRIPTION}</p>
           <Button className={CTA_BUTTON_STYLES} onClick={handleBackToDashboard}>
             {BACK_TO_DASHBOARD_BUTTON}
           </Button>
@@ -48,25 +59,20 @@ export function ResultsPage() {
     );
   }
 
+  const timeTakenSeconds = sumTimeSpentSeconds(latestResult.question_breakdown);
+
   return (
     <div className={CONTAINER_STYLES}>
-      <ScoreSummary result={latestResult} />
+      <ResultsSummaryCard result={latestResult} timeTakenSeconds={timeTakenSeconds} />
 
-      <QuestionBreakdownList
-        items={latestResult.question_breakdown}
-        section={latestResult.section}
-      />
+      <QuestionBreakdownAccordion items={latestResult.question_breakdown} />
 
       <div className={CTA_CONTAINER_STYLES}>
+        <Button variant="outline" className={CTA_BUTTON_STYLES} onClick={handleTryAgain}>
+          {TRY_AGAIN_BUTTON}
+        </Button>
         <Button className={CTA_BUTTON_STYLES} onClick={handleBackToDashboard}>
           {BACK_TO_DASHBOARD_BUTTON}
-        </Button>
-        <Button
-          variant="outline"
-          className={CTA_BUTTON_STYLES}
-          onClick={handleBackToDashboard}
-        >
-          {START_NEW_PRACTICE_BUTTON}
         </Button>
       </div>
     </div>
