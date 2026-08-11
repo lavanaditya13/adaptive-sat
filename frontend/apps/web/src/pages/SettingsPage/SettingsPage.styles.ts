@@ -36,6 +36,7 @@ export const READONLY_HELPER_STYLES = 'm-0 mt-1.5 text-[11px] text-ink-muted';
 export const FOOTER_DIVIDER_STYLES = 'mt-[22px] h-px bg-hairline';
 export const FOOTER_ROW_STYLES = 'flex items-center justify-end gap-3 px-6 py-4';
 export const UNSAVED_LABEL_STYLES = 'text-xs text-ink-muted';
+export const SAVE_ERROR_STYLES = 'mr-auto text-xs text-danger';
 export const SAVE_BUTTON_ENABLED_STYLES =
   'cursor-pointer rounded-[10px] border-none bg-math-button px-5 py-2.5 text-[13px] font-bold text-white hover:opacity-90';
 export const SAVE_BUTTON_DISABLED_STYLES =

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Link2, User as UserIcon } from 'lucide-react';
 import { Button } from '@workspace/ui/components/button';
@@ -7,6 +7,8 @@ import { Input } from '@workspace/ui/components/input';
 import { Skeleton } from '@workspace/ui/components/skeleton';
 import { ConnectedProvidersList } from '@/components/settings/ConnectedProvidersList/ConnectedProvidersList';
 import { getConnectedProviders } from '@/services/settings-service';
+import { updateProfile } from '@/services/auth-service';
+import { getApiErrorDetail } from '@/utils/api-errors';
 import { useAuthStore } from '@/store/auth-store';
 import { useAppShellStore } from '@/store/app-shell-store';
 import { queryKeys } from '@/constants/query-keys';
@@ -38,6 +40,7 @@ import {
   FOOTER_DIVIDER_STYLES,
   FOOTER_ROW_STYLES,
   UNSAVED_LABEL_STYLES,
+  SAVE_ERROR_STYLES,
   SAVE_BUTTON_ENABLED_STYLES,
   SAVE_BUTTON_DISABLED_STYLES,
   SKELETON_ROW_STYLES,
@@ -63,7 +66,9 @@ import {
   EMAIL_HELPER,
   UNSAVED_CHANGES_LABEL,
   SAVE_CHANGES_LABEL,
+  SAVING_CHANGES_LABEL,
   PROFILE_UPDATED_TOAST,
+  PROFILE_SAVE_ERROR_MESSAGE,
   LINKED_ACCOUNTS_TITLE,
   LINKED_ACCOUNTS_SUBTITLE,
   ADD_PROVIDER_LABEL,
@@ -126,24 +131,35 @@ export function SettingsPage() {
     queryClient.invalidateQueries({ queryKey: queryKeys.auth.user });
   };
 
+  const saveProfileMutation = useMutation({
+    mutationFn: updateProfile,
+    onSuccess: (updatedUser) => {
+      // The server is the source of truth for the composed full_name, so the
+      // saved baseline (and therefore the dirty-state bar) is rebuilt from the
+      // response rather than from what was typed.
+      const { firstName, lastName } = splitFullName(updatedUser.full_name);
+      setSavedFirstName(firstName);
+      setSavedLastName(lastName);
+      setFirstNameInput(firstName);
+      setLastNameInput(lastName);
+      setUser(updatedUser);
+      queryClient.invalidateQueries({ queryKey: queryKeys.auth.user });
+      showToast(PROFILE_UPDATED_TOAST);
+    },
+    onError: (error) => {
+      // The saved baseline is left untouched on purpose: the edit is still
+      // unsaved, so the unsaved-changes bar must stay up rather than imply
+      // the write went through.
+      showToast(getApiErrorDetail(error));
+    },
+  });
+
   const handleSaveProfile = () => {
     if (!user) return;
-    const nextFirstName = firstNameInput.trim();
-    const nextLastName = lastNameInput.trim();
-    const nextFullName = [nextFirstName, nextLastName].filter(Boolean).join(' ');
-
-    // No backend endpoint persists profile name changes today (verified: no
-    // PATCH/PUT route exists for the user profile, and the User model only
-    // stores a single full_name column). This updates the local session only
-    // — it does not survive a refresh — so we deliberately do NOT invalidate
-    // the auth "me" query here, since that would immediately refetch the
-    // unchanged server value and silently revert this "successful" save.
-    setUser({ ...user, full_name: nextFullName });
-    setSavedFirstName(nextFirstName);
-    setSavedLastName(nextLastName);
-    setFirstNameInput(nextFirstName);
-    setLastNameInput(nextLastName);
-    showToast(PROFILE_UPDATED_TOAST);
+    saveProfileMutation.mutate({
+      first_name: firstNameInput.trim(),
+      last_name: lastNameInput.trim(),
+    });
   };
 
   return (
@@ -208,11 +224,21 @@ export function SettingsPage() {
 
         <div className={FOOTER_DIVIDER_STYLES} />
         <div className={FOOTER_ROW_STYLES}>
+          {saveProfileMutation.isError && (
+            <p className={SAVE_ERROR_STYLES} role="alert">
+              {PROFILE_SAVE_ERROR_MESSAGE}
+            </p>
+          )}
           {isProfileDirty ? (
             <>
               <span className={UNSAVED_LABEL_STYLES}>{UNSAVED_CHANGES_LABEL}</span>
-              <button type="button" className={SAVE_BUTTON_ENABLED_STYLES} onClick={handleSaveProfile}>
-                {SAVE_CHANGES_LABEL}
+              <button
+                type="button"
+                className={SAVE_BUTTON_ENABLED_STYLES}
+                onClick={handleSaveProfile}
+                disabled={saveProfileMutation.isPending}
+              >
+                {saveProfileMutation.isPending ? SAVING_CHANGES_LABEL : SAVE_CHANGES_LABEL}
               </button>
             </>
           ) : (

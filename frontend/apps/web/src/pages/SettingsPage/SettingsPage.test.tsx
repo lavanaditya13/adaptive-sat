@@ -5,10 +5,16 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SettingsPage } from './SettingsPage';
 import { getConnectedProviders } from '@/services/settings-service';
+import { updateProfile } from '@/services/auth-service';
+import { queryKeys } from '@/constants/query-keys';
 
 vi.mock('@/services/settings-service', () => ({
   getConnectedProviders: vi.fn(),
   unlinkProvider: vi.fn(),
+}));
+
+vi.mock('@/services/auth-service', () => ({
+  updateProfile: vi.fn(),
 }));
 
 vi.mock('@/components/toast/toast-provider', () => ({
@@ -38,19 +44,24 @@ vi.mock('@/store/app-shell-store', () => ({
 }));
 
 function renderPage() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+  render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
         <SettingsPage />
       </MemoryRouter>
     </QueryClientProvider>
   );
+  return { invalidateSpy };
 }
 
 describe('SettingsPage', () => {
   beforeEach(() => {
     vi.mocked(getConnectedProviders).mockReset();
+    vi.mocked(updateProfile).mockReset();
     setUserMock.mockReset();
     showToastMock.mockReset();
     mockUser = {
@@ -90,10 +101,11 @@ describe('SettingsPage', () => {
     });
   });
 
-  it('reveals the unsaved-changes bar when the name is edited, then hides it and toasts on save', async () => {
+  it('persists the edited name through the API, then hides the unsaved bar and toasts', async () => {
     vi.mocked(getConnectedProviders).mockResolvedValue({ providers: [], has_password: true });
+    vi.mocked(updateProfile).mockResolvedValue({ ...mockUser, full_name: 'Alex Rivera' });
     const user = userEvent.setup();
-    renderPage();
+    const { invalidateSpy } = renderPage();
 
     expect(screen.queryByText(/unsaved changes/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
@@ -108,10 +120,42 @@ describe('SettingsPage', () => {
 
     await user.click(saveButton);
 
+    await waitFor(() => {
+      // React Query passes a mutation context as a second argument.
+      expect(vi.mocked(updateProfile).mock.calls[0]?.[0]).toEqual({
+        first_name: 'Alex',
+        last_name: 'Rivera',
+      });
+    });
+
+    // The refetch is what confirms the save now that the server persists it.
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.auth.user });
+    });
     expect(setUserMock).toHaveBeenCalledWith(expect.objectContaining({ full_name: 'Alex Rivera' }));
     expect(showToastMock).toHaveBeenCalledWith(expect.stringMatching(/profile updated/i));
     expect(screen.queryByText(/unsaved changes/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+  });
+
+  it('keeps the unsaved-changes bar and surfaces an error when the save fails', async () => {
+    vi.mocked(getConnectedProviders).mockResolvedValue({ providers: [], has_password: true });
+    vi.mocked(updateProfile).mockRejectedValue(new Error('network error'));
+    const user = userEvent.setup();
+    const { invalidateSpy } = renderPage();
+
+    const lastNameField = await screen.findByLabelText(/last name/i);
+    await user.clear(lastNameField);
+    await user.type(lastNameField, 'Rivera');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/couldn.t save your profile/i);
+    });
+    expect(screen.getByText(/unsaved changes/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeEnabled();
+    expect(setUserMock).not.toHaveBeenCalled();
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: queryKeys.auth.user });
   });
 
   it('does not reveal the unsaved-changes bar when the name is unchanged', async () => {
