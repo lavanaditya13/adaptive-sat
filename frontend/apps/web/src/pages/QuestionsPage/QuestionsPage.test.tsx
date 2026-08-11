@@ -15,7 +15,11 @@ import { useResultsStore } from '@/store/results-store';
 import { MOCK_COMPLETE_RESPONSE, MOCK_QUESTIONS } from '@/mocks/mock-data';
 import { queryKeys } from '@/constants/query-keys';
 import { FINISH_TEST_LABEL, SKIP_LABEL } from '@/components/practice/SessionNavigation/SessionNavigation.constants';
-import { OPEN_NAV_LABEL } from '@/components/practice/SessionHeader/SessionHeader.constants';
+import {
+  LIVE_TIMER_LABEL,
+  OPEN_NAV_LABEL,
+  SESSION_TIMER_LABEL,
+} from '@/components/practice/SessionHeader/SessionHeader.constants';
 
 vi.mock('@/services/practice-service', () => ({
   getCurrentQuestion: vi.fn(),
@@ -77,8 +81,10 @@ describe('QuestionsPage', () => {
       expect(screen.getByText(MOCK_QUESTIONS[0].prompt)).toBeInTheDocument();
     });
     expect(screen.getByText('Question 1 of 3')).toBeInTheDocument();
-    // formatClock(0) — DM Mono M:SS, one for the session total and one live.
-    expect(screen.getAllByText(/0:00/)).not.toHaveLength(0);
+    // Both clocks tick on a real 1s interval, so assert the M:SS shape rather
+    // than a literal 0:00 that a slow run has already ticked past.
+    expect(screen.getByLabelText(SESSION_TIMER_LABEL)).toHaveTextContent(/^\d+:[0-5]\d total$/);
+    expect(screen.getByLabelText(LIVE_TIMER_LABEL)).toHaveTextContent(/^\d+:[0-5]\d$/);
     // The breadcrumb can't derive the topic from the URL, so the page sets it.
     expect(useAppShellStore.getState().trailingCrumbLabel).toBe(
       MOCK_QUESTIONS[0].topic_display_name
