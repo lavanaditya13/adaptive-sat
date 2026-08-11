@@ -90,11 +90,16 @@ export async function submitAnswer(
   }
 }
 
-// ASSUMPTION (not confirmed by backend): no param returns the active session's current question.
-// Comment this clearly — if wrong, this is the first thing to fix.
-export async function getCurrentQuestion(): Promise<QuestionResponse> {
+/* No argument returns the session's next unanswered question. `position` targets a
+   specific slot — the backend's `questionId` query param is a 1-based position within
+   the session, not a Question primary key, and it rejects positions that have already
+   been answered (400). Answered questions are therefore only reachable from the
+   client-side cache the session hook keeps. */
+export async function getCurrentQuestion(position?: number): Promise<QuestionResponse> {
   try {
-    const response = await apiClient.get<QuestionResponse>(API.PRACTICE.QUESTION);
+    const response = await apiClient.get<QuestionResponse>(API.PRACTICE.QUESTION, {
+      params: position === undefined ? undefined : { questionId: position },
+    });
     return response.data;
   } catch (error) {
     if (!shouldUseMockFallback(error)) {
