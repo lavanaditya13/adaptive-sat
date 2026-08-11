@@ -9,6 +9,7 @@ from app.models.practice_context import PracticeContext
 from app.models.attempt import Attempt
 from app.models.study_plan import StudyPlan
 from app.models.section import Section
+from app.models.idempotency_key import IdempotencyKey
 
 __all__ = [
     "Base",
@@ -21,4 +22,5 @@ __all__ = [
     "Attempt",
     "StudyPlan",
     "Section",
+    "IdempotencyKey",
 ]

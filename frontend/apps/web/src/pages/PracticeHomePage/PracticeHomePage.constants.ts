@@ -1,2 +1,1 @@
-export const PAGE_TITLE = 'Practice home';
-export const PAGE_DESCRIPTION = 'General practice or drill into a domain.';
+export const START_ERROR_MESSAGE = 'Could not start practice. Please try again.';
