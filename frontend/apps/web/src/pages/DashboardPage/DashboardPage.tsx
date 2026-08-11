@@ -1,16 +1,16 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, ClipboardList, TrendingUp, Flame } from 'lucide-react';
 import { Skeleton } from '@workspace/ui/components/skeleton';
 import { StatCard } from '@/components/dashboard/StatCard/StatCard';
 import { WeakTopicsList } from '@/components/dashboard/WeakTopicsList/WeakTopicsList';
 import { SectionCard } from '@/components/dashboard/SectionCard/SectionCard';
 import { EstimatedScoreCard } from '@/components/dashboard/EstimatedScoreCard/EstimatedScoreCard';
-import { PracticeModal } from '@/components/dashboard/PracticeModal/PracticeModal';
 import { EmailVerificationBanner } from '@/components/dashboard/EmailVerificationBanner/EmailVerificationBanner';
 import { getDashboard } from '@/services/dashboard-service';
 import { useAuthStore } from '@/store/auth-store';
 import { queryKeys } from '@/constants/query-keys';
+import { practicePath } from '@/constants/routes';
 import { getApiErrorDetail } from '@/utils/api-errors';
 import type { DashboardResponse } from '@/types/api';
 import {
@@ -51,6 +51,7 @@ type DashboardSection = DashboardResponse['sections'][number];
 
 export function DashboardPage() {
   const user = useAuthStore((state) => state.user);
+  const navigate = useNavigate();
 
   const {
     data: dashboard,
@@ -61,12 +62,11 @@ export function DashboardPage() {
     queryFn: getDashboard,
   });
 
-  const [activeSection, setActiveSection] = useState<DashboardSection | null>(null);
-  const [modalKey, setModalKey] = useState(0);
-
+  /* Picking a section is navigation, not a commitment to practise: it opens that
+     section's practice home, where the student still chooses general vs. by-topic.
+     Nothing is started and no session is created until they pick a mode there. */
   const handleOpenSection = (section: DashboardSection) => {
-    setActiveSection(section);
-    setModalKey((key) => key + 1);
+    navigate(practicePath.subject(section.name));
   };
 
   if (isLoading) {
@@ -156,17 +156,6 @@ export function DashboardPage() {
           ))}
         </div>
       </div>
-
-      <PracticeModal
-        key={modalKey}
-        section={activeSection}
-        open={activeSection !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setActiveSection(null);
-          }
-        }}
-      />
     </div>
   );
 }

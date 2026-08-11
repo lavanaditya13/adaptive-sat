@@ -1,10 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DashboardPage } from './DashboardPage';
 import { getDashboard } from '@/services/dashboard-service';
 import { MOCK_DASHBOARD } from '@/mocks/mock-data';
+
+const navigateMock = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return { ...actual, useNavigate: () => navigateMock };
+});
 
 vi.mock('@/services/dashboard-service', () => ({
   getDashboard: vi.fn(),
@@ -29,6 +36,20 @@ function renderPage() {
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.mocked(getDashboard).mockReset();
+    navigateMock.mockReset();
+  });
+
+  it('navigates to the section practice home instead of starting practice or opening a dialog', async () => {
+    vi.mocked(getDashboard).mockResolvedValue(MOCK_DASHBOARD);
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await waitFor(() => screen.getByText('Math'));
+    await user.click(screen.getByText('Math'));
+
+    expect(navigateMock).toHaveBeenCalledWith('/practice/math');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('renders the greeting, progress stats, and practice sections once loaded', async () => {
