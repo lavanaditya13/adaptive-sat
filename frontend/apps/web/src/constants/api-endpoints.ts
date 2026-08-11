@@ -1,8 +1,13 @@
+/* GET returns the session user; PATCH updates that same record and responds
+   with the identical shape, so both share one path constant. */
+const AUTH_ME = '/api/v1/auth/me';
+
 export const API = {
   AUTH: {
     SIGNUP: '/api/v1/auth/signup',
     LOGIN: '/api/v1/auth/login',
-    ME: '/api/v1/auth/me',
+    ME: AUTH_ME,
+    UPDATE_PROFILE: AUTH_ME,
     LOGOUT: '/api/v1/auth/logout',
     GOOGLE_START: '/api/v1/auth/google',
     VERIFY_EMAIL: '/api/v1/auth/verify-email',
