@@ -68,6 +68,16 @@ export async function abandonPractice(): Promise<AbandonResponse> {
   }
 }
 
+/**
+ * `selectedAnswer: null` records a deliberate skip — the backend stores an
+ * attempt with no choice and advances the session, which is the only way to
+ * move past a question without answering it.
+ *
+ * `confidence` is the canonical field name in the OpenAPI schema;
+ * `confidence_level` is its alias and is sent alongside so the payload is
+ * accepted by both the aliased and the pre-alias backend. Both must be 1–5 —
+ * a CHECK constraint rejects 0 and 6.
+ */
 export async function submitAnswer(
   selectedAnswer: string | null,
   timeSpentSeconds: number,
@@ -77,6 +87,7 @@ export async function submitAnswer(
     const response = await apiClient.post<AnswerResponse>(API.PRACTICE.ANSWER, {
       selected_answer: selectedAnswer,
       time_spent_seconds: timeSpentSeconds,
+      confidence: confidenceLevel,
       confidence_level: confidenceLevel,
     });
     return response.data;
@@ -86,7 +97,7 @@ export async function submitAnswer(
     }
 
     console.warn('API submitAnswer failed, returning mock fallback response:', error);
-    return mockHandlers.submitAnswer(selectedAnswer, timeSpentSeconds, confidenceLevel);
+    return mockHandlers.submitAnswer(selectedAnswer ?? '', timeSpentSeconds, confidenceLevel);
   }
 }
 

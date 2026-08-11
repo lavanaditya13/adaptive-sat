@@ -17,7 +17,3 @@ export { PracticeDomainsPage } from './PracticeDomainsPage';
 export { PracticeSkillsPage } from './PracticeSkillsPage';
 export { PracticeConfirmPage } from './PracticeConfirmPage';
 export { QuestionsPage } from './QuestionsPage';
-
-/** Legacy session runner, superseded by QuestionsPage at /practice/session.
- *  Kept unrouted so the questions segment can port its logic across. */
-export { PracticePage } from './PracticePage/PracticePage';
