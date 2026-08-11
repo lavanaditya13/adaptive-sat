@@ -1,89 +1,118 @@
+import { X } from 'lucide-react';
+import { cn } from '@workspace/ui/lib/utils';
+import type { SessionAccent } from '@/components/practice/session-accent';
 import {
-  ANSWERED_HINT,
-  buildDotTitle,
-  CURRENT_HINT,
+  CLOSE_LABEL,
+  LEGEND_ANSWERED,
+  LEGEND_LOCKED,
+  LEGEND_SKIPPED,
   PANEL_TITLE,
-  SKIPPED_HINT,
-  UNSEEN_HINT,
+  QUESTION_TITLE_PREFIX,
+  STATE_HINTS,
+  type NavItem,
 } from './QuestionNavPanel.constants';
 import {
-  DOT_ANSWERED_STYLES,
-  DOT_BASE_STYLES,
-  DOT_CURRENT_STYLES,
+  CLOSE_BUTTON_STYLES,
+  DOT_ENABLED_STYLES,
+  DOT_LOCKED_STYLES,
+  DOT_NEUTRAL_STYLES,
   DOT_SKIPPED_STYLES,
-  DOT_UNSEEN_STYLES,
+  DOT_STYLES,
   GRID_STYLES,
+  LEGEND_ITEM_STYLES,
+  LEGEND_STYLES,
+  LEGEND_SWATCH_STYLES,
   OVERLAY_STYLES,
-  PANEL_STYLES,
+  PANEL_DESKTOP_STYLES,
+  PANEL_SHEET_STYLES,
+  TITLE_ROW_STYLES,
   TITLE_STYLES,
 } from './QuestionNavPanel.styles';
 
-export interface QuestionNavItem {
-  position: number;
-  answered: boolean;
-  skipped: boolean;
-  /** False for positions the session has never served; those can still be opened,
-   *  the backend hands them over on demand. */
-  seen: boolean;
-}
-
 interface QuestionNavPanelProps {
-  items: QuestionNavItem[];
-  currentPosition: number;
-  accentSolid: string;
-  accentRing: string;
+  open: boolean;
+  items: NavItem[];
+  accent: SessionAccent;
+  /** Renders as a bottom sheet instead of a centred dialog below 900px. */
+  isMobile: boolean;
   onSelect: (position: number) => void;
   onClose: () => void;
 }
 
 export function QuestionNavPanel({
+  open,
   items,
-  currentPosition,
-  accentSolid,
-  accentRing,
+  accent,
+  isMobile,
   onSelect,
   onClose,
 }: QuestionNavPanelProps) {
+  if (!open) {
+    return null;
+  }
+
   return (
     <>
-      <button
-        type="button"
-        aria-label="Close"
-        className={OVERLAY_STYLES}
-        onClick={onClose}
-      />
-      <div className={PANEL_STYLES} role="dialog" aria-label={PANEL_TITLE}>
-        <p className={TITLE_STYLES}>{PANEL_TITLE}</p>
+      <div className={OVERLAY_STYLES} onClick={onClose} data-testid="question-nav-overlay" />
+
+      <div
+        role="dialog"
+        aria-label={PANEL_TITLE}
+        className={isMobile ? PANEL_SHEET_STYLES : PANEL_DESKTOP_STYLES}
+      >
+        <div className={TITLE_ROW_STYLES}>
+          <p className={TITLE_STYLES}>{PANEL_TITLE}</p>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={CLOSE_LABEL}
+            className={CLOSE_BUTTON_STYLES}
+          >
+            <X className="size-4" aria-hidden="true" />
+          </button>
+        </div>
+
         <div className={GRID_STYLES}>
           {items.map((item) => {
-            const isCurrent = item.position === currentPosition;
-            const hint = isCurrent
-              ? CURRENT_HINT
-              : item.answered
-                ? ANSWERED_HINT
-                : item.skipped
-                  ? SKIPPED_HINT
-                  : UNSEEN_HINT;
-
-            const tone = item.answered
-              ? `${DOT_ANSWERED_STYLES} ${accentSolid}`
-              : item.skipped
-                ? DOT_SKIPPED_STYLES
-                : DOT_UNSEEN_STYLES;
+            const isLocked = item.state === 'locked';
 
             return (
               <button
                 key={item.position}
                 type="button"
-                title={buildDotTitle(item.position, hint)}
-                aria-current={isCurrent ? 'true' : undefined}
-                className={`${DOT_BASE_STYLES} ${tone} ${isCurrent ? `${DOT_CURRENT_STYLES} ${accentRing}` : ''}`}
+                disabled={isLocked}
                 onClick={() => onSelect(item.position)}
+                title={`${QUESTION_TITLE_PREFIX} ${item.position} — ${STATE_HINTS[item.state]}`}
+                aria-current={item.isCurrent ? 'step' : undefined}
+                className={cn(
+                  DOT_STYLES,
+                  isLocked ? DOT_LOCKED_STYLES : DOT_ENABLED_STYLES,
+                  item.state === 'answered' &&
+                    cn(accent.solidBg, accent.solidBorder, 'text-white'),
+                  item.state === 'skipped' && DOT_SKIPPED_STYLES,
+                  item.state === 'unanswered' && DOT_NEUTRAL_STYLES,
+                  item.isCurrent && cn('border-2', accent.lightBorder)
+                )}
               >
                 {item.position}
               </button>
             );
           })}
+        </div>
+
+        <div className={LEGEND_STYLES}>
+          <span className={LEGEND_ITEM_STYLES}>
+            <span className={cn(LEGEND_SWATCH_STYLES, accent.solidBg)} aria-hidden="true" />
+            {LEGEND_ANSWERED}
+          </span>
+          <span className={LEGEND_ITEM_STYLES}>
+            <span className={cn(LEGEND_SWATCH_STYLES, 'bg-warning')} aria-hidden="true" />
+            {LEGEND_SKIPPED}
+          </span>
+          <span className={LEGEND_ITEM_STYLES}>
+            <span className={cn(LEGEND_SWATCH_STYLES, 'bg-white/20')} aria-hidden="true" />
+            {LEGEND_LOCKED}
+          </span>
         </div>
       </div>
     </>

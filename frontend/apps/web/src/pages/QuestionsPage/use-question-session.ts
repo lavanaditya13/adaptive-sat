@@ -1,286 +1,348 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
+import { DEFAULT_CONFIDENCE } from '@/components/practice/ConfidenceSelector/ConfidenceSelector.constants';
+import type { SegmentState } from '@/components/practice/ProgressBar/ProgressBar.constants';
+import type { NavItem, NavItemState } from '@/components/practice/QuestionNavPanel/QuestionNavPanel.constants';
 import {
+  FINISH_TEST_LABEL,
+  NEXT_LABEL,
+  NEXT_QUESTION_LABEL,
+} from '@/components/practice/SessionNavigation/SessionNavigation.constants';
+import { getSessionAccent } from '@/components/practice/session-accent';
+import { queryKeys } from '@/constants/query-keys';
+import { ROUTES } from '@/constants/routes';
+import {
+  abandonPractice,
   completePractice,
   getCurrentQuestion,
   submitAnswer,
-  updateAttempt,
 } from '@/services/practice-service';
-import type { CompleteResponse, Question } from '@/types/api';
-import { DEFAULT_CONFIDENCE } from './QuestionsPage.constants';
+import { useAppShellStore } from '@/store/app-shell-store';
+import { useResultsStore } from '@/store/results-store';
+import type { ApiErrorResponse, Question } from '@/types/api';
+import {
+  ERROR_COMPLETING_SESSION,
+  ERROR_SAVING_ANSWER,
+  NO_ACTIVE_SESSION_STATUS,
+  NO_SESSION_TOAST,
+  SESSION_ENDED_TOAST,
+} from './QuestionsPage.constants';
 
-/** One slot per position in the session.
- *
- *  `question` is cached the first time a position is served because the backend
- *  cannot serve it again: GET /practice/question?questionId=<position> returns 400
- *  once that position has been answered. Everything the review UI shows for an
- *  answered question therefore comes from here, not from a refetch. */
-export interface SessionSlot {
+/** One question the student has already sent to the backend. Attempts are
+ *  immutable server-side, so these entries are read-only once recorded. */
+interface SubmittedAnswer {
   position: number;
-  question: Question | null;
+  question: Question;
   selectedAnswer: string | null;
-  /** First answer committed to the server, so "changed from your original" is
-   *  about what the server holds rather than local keystrokes. */
-  firstSubmittedAnswer: string | null;
   confidence: number;
   timeSpentSeconds: number;
-  attemptId: number | null;
-  answered: boolean;
-  /** Moved past without answering. The position stays ASSIGNED server-side, which
-   *  is what makes coming back to it possible at all. */
   skipped: boolean;
 }
 
-function emptySlot(position: number): SessionSlot {
-  return {
-    position,
-    question: null,
-    selectedAnswer: null,
-    firstSubmittedAnswer: null,
-    confidence: DEFAULT_CONFIDENCE,
-    timeSpentSeconds: 0,
-    attemptId: null,
-    answered: false,
-    skipped: false,
-  };
-}
+export type SessionStatus = 'loading' | 'ready' | 'resume-error';
 
-interface UseQuestionSessionResult {
-  slots: SessionSlot[];
-  currentPosition: number;
-  current: SessionSlot | undefined;
-  totalQuestions: number;
-  sessionSeconds: number;
-  isLoading: boolean;
-  isBusy: boolean;
-  loadError: string | null;
-  sessionEnded: boolean;
-  selectAnswer: (answer: string) => void;
-  selectConfidence: (level: number) => void;
-  goToPosition: (position: number) => Promise<void>;
-  goNext: () => Promise<void>;
-  goPrevious: () => Promise<void>;
-  skip: () => Promise<void>;
-  finish: () => Promise<CompleteResponse | null>;
-  retryLoad: () => Promise<void>;
-}
+export function useQuestionSession() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const setLatestResult = useResultsStore((state) => state.setLatestResult);
+  const showToast = useAppShellStore((state) => state.showToast);
+  const isMobile = useAppShellStore((state) => state.isMobile);
 
-export function useQuestionSession(): UseQuestionSessionResult {
-  const [slots, setSlots] = useState<SessionSlot[]>([]);
-  const [currentPosition, setCurrentPosition] = useState(1);
+  const [status, setStatus] = useState<SessionStatus>('loading');
+  const [question, setQuestion] = useState<Question | null>(null);
+  const [currentPosition, setCurrentPosition] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
+  const [answers, setAnswers] = useState<SubmittedAnswer[]>([]);
+  const [viewPosition, setViewPosition] = useState(0);
+  const [furthestPosition, setFurthestPosition] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [confidence, setConfidence] = useState<number>(DEFAULT_CONFIDENCE);
+  const [questionSeconds, setQuestionSeconds] = useState(0);
   const [sessionSeconds, setSessionSeconds] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isBusy, setIsBusy] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [sessionEnded, setSessionEnded] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isNavOpen, setIsNavOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  /* The one-second tick and the async navigation helpers both need the position
-     that is current *when they run*, not the one captured when they were created. */
-  const positionRef = useRef(currentPosition);
-  useEffect(() => {
-    positionRef.current = currentPosition;
-  }, [currentPosition]);
+  /** Latched independently of `isSubmitting` state so two clicks landing in the
+   *  same tick can't both reach POST /answer. */
+  const submittingRef = useRef(false);
+  const hasLoadedRef = useRef(false);
+  const [isLeaving, setIsLeaving] = useState(false);
 
-  const applyServed = useCallback((position: number, question: Question, total: number) => {
-    setTotalQuestions((prev) => (total > 0 ? total : prev));
-    setSlots((prev) => {
-      const size = Math.max(total, prev.length, position);
-      const next = Array.from({ length: size }, (_, i) => prev[i] ?? emptySlot(i + 1));
-      next[position - 1] = { ...next[position - 1], question };
-      return next;
-    });
+  const isReviewing = viewPosition > 0 && viewPosition < currentPosition;
+
+  const applyQuestion = useCallback((next: Question, position: number, total: number) => {
+    setQuestion(next);
     setCurrentPosition(position);
+    setTotalQuestions(total);
+    setViewPosition(position);
+    setFurthestPosition((previous) => Math.max(previous, position));
+    setSelectedAnswer(null);
+    setConfidence(DEFAULT_CONFIDENCE);
+    setQuestionSeconds(0);
+    setStatus('ready');
   }, []);
 
-  const fetchSession = useCallback(async (isCancelled: () => boolean = () => false) => {
+  const finishSession = useCallback(async () => {
     try {
-      const response = await getCurrentQuestion();
-      if (isCancelled()) {
-        return;
-      }
-      if (!response.question || response.current_position === null) {
-        // Every question is answered — the session is only waiting to be completed.
-        setSessionEnded(true);
-        setTotalQuestions(response.total_questions);
-        return;
-      }
-      applyServed(response.current_position, response.question, response.total_questions);
+      const result = await completePractice();
+      setLatestResult(result);
+      // Completing a session moves dashboard metrics (questions answered,
+      // sessions completed, estimated score) — drop the pre-session cache.
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+      setIsLeaving(true);
+      setQuestion(null);
+      navigate(ROUTES.RESULTS);
     } catch {
-      setLoadError('Could not load this practice session.');
-    } finally {
-      setIsLoading(false);
+      setErrorMessage(ERROR_COMPLETING_SESSION);
     }
-  }, [applyServed]);
+  }, [navigate, queryClient, setLatestResult]);
 
-  useEffect(() => {
-    let cancelled = false;
+  /** Loads (or resumes) the active session's current question. Only a
+   *  confirmed 404 means "no active session" — a refresh, a flaky connection
+   *  or a laptop waking from sleep must never bounce a student off a session
+   *  that still exists on the server. */
+  const loadSession = useCallback(() => {
+    setStatus('loading');
+    setErrorMessage(null);
 
-    // The IIFE's first statement is the request, so no state is written
-    // synchronously during the effect — nothing here can cascade a render.
-    void (async () => {
-      await fetchSession(() => cancelled);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchSession]);
-
-  const retryLoad = useCallback(async () => {
-    setIsLoading(true);
-    setLoadError(null);
-    await fetchSession();
-  }, [fetchSession]);
-
-  // Per-question and whole-session clocks. Both are client-side; the per-question
-  // value is what gets sent as time_spent_seconds when the answer is submitted.
-  useEffect(() => {
-    const id = setInterval(() => {
-      setSessionSeconds((s) => s + 1);
-      setSlots((prev) => {
-        const index = positionRef.current - 1;
-        if (!prev[index] || prev[index].answered) {
-          return prev;
+    getCurrentQuestion()
+      .then((data) => {
+        if (!data.question) {
+          // Every question is already answered — the session is ready to complete.
+          return finishSession();
         }
-        const next = [...prev];
-        next[index] = { ...next[index], timeSpentSeconds: next[index].timeSpentSeconds + 1 };
-        return next;
+
+        applyQuestion(data.question, data.current_position, data.total_questions);
+        return undefined;
+      })
+      .catch((error: unknown) => {
+        const confirmedNoActiveSession =
+          axios.isAxiosError<ApiErrorResponse>(error) &&
+          error.response?.status === NO_ACTIVE_SESSION_STATUS;
+
+        if (confirmedNoActiveSession) {
+          setIsLeaving(true);
+          showToast(NO_SESSION_TOAST);
+          navigate(ROUTES.DASHBOARD);
+          return;
+        }
+
+        setStatus('resume-error');
       });
+  }, [applyQuestion, finishSession, navigate, showToast]);
+
+  useEffect(() => {
+    if (hasLoadedRef.current) {
+      return;
+    }
+
+    hasLoadedRef.current = true;
+    loadSession();
+  }, [loadSession]);
+
+  // One interval for the whole runner, torn down whenever the clock should
+  // stop — paused, reviewing a past question, loading, or already finished.
+  const isTicking = status === 'ready' && !isPaused && !isReviewing && question !== null;
+
+  useEffect(() => {
+    if (!isTicking) {
+      return undefined;
+    }
+
+    const intervalId = setInterval(() => {
+      setSessionSeconds((previous) => previous + 1);
+      setQuestionSeconds((previous) => previous + 1);
     }, 1000);
 
-    return () => clearInterval(id);
-  }, []);
+    return () => clearInterval(intervalId);
+  }, [isTicking]);
 
-  const patchCurrent = useCallback((patch: Partial<SessionSlot>) => {
-    setSlots((prev) => {
-      const index = positionRef.current - 1;
-      if (!prev[index]) {
-        return prev;
-      }
-      const next = [...prev];
-      next[index] = { ...next[index], ...patch };
-      return next;
-    });
-  }, []);
-
-  const selectAnswer = useCallback(
-    (answer: string) => patchCurrent({ selectedAnswer: answer }),
-    [patchCurrent]
-  );
-  const selectConfidence = useCallback(
-    (level: number) => patchCurrent({ confidence: level }),
-    [patchCurrent]
-  );
-
-  /** Persist the current slot before leaving it: a first answer creates the attempt,
-   *  a changed answer on an already-answered slot updates it. */
-  const commitCurrent = useCallback(async () => {
-    const slot = slots[positionRef.current - 1];
-    if (!slot || slot.selectedAnswer === null) {
-      return;
-    }
-
-    if (!slot.answered) {
-      const response = await submitAnswer(
-        slot.selectedAnswer,
-        slot.timeSpentSeconds,
-        slot.confidence
-      );
-      patchCurrent({
-        answered: true,
-        skipped: false,
-        attemptId: response.attempt_id,
-        firstSubmittedAnswer: slot.selectedAnswer,
-      });
-      return;
-    }
-
-    if (slot.attemptId !== null && slot.selectedAnswer !== slot.firstSubmittedAnswer) {
-      await updateAttempt(slot.attemptId, slot.selectedAnswer);
-    }
-  }, [slots, patchCurrent]);
-
-  const goToPosition = useCallback(
-    async (position: number) => {
-      if (position < 1 || (totalQuestions > 0 && position > totalQuestions)) {
+  const submitAndAdvance = useCallback(
+    async (answer: string | null, skipped: boolean) => {
+      if (submittingRef.current || !question || status !== 'ready') {
         return;
       }
 
-      const target = slots[position - 1];
-      if (target?.question) {
-        // Already seen — render from cache. Refetching an answered position 400s.
-        setCurrentPosition(position);
-        return;
-      }
+      submittingRef.current = true;
+      setIsSubmitting(true);
+      setErrorMessage(null);
 
-      setIsBusy(true);
+      const answeredPosition = currentPosition;
+      const answeredQuestion = question;
+      const spent = questionSeconds;
+      const rating = confidence;
+
       try {
-        const response = await getCurrentQuestion(position);
-        if (response.question && response.current_position !== null) {
-          applyServed(response.current_position, response.question, response.total_questions);
+        const response = await submitAnswer(answer, spent, rating);
+
+        setAnswers((previous) => [
+          ...previous.filter((entry) => entry.position !== answeredPosition),
+          {
+            position: answeredPosition,
+            question: answeredQuestion,
+            selectedAnswer: answer,
+            confidence: rating,
+            timeSpentSeconds: spent,
+            skipped,
+          },
+        ]);
+
+        if (response.remaining_questions > 0) {
+          const next = await getCurrentQuestion();
+
+          if (!next.question) {
+            await finishSession();
+            return;
+          }
+
+          applyQuestion(next.question, next.current_position, next.total_questions);
+          return;
         }
-      } catch {
-        setLoadError('Could not open that question.');
+
+        await finishSession();
+      } catch (error: unknown) {
+        const detail = axios.isAxiosError<ApiErrorResponse>(error)
+          ? error.response?.data?.detail
+          : undefined;
+        setErrorMessage(detail || ERROR_SAVING_ANSWER);
       } finally {
-        setIsBusy(false);
+        submittingRef.current = false;
+        setIsSubmitting(false);
       }
     },
-    [slots, totalQuestions, applyServed]
+    [applyQuestion, confidence, currentPosition, finishSession, question, questionSeconds, status]
   );
 
-  const goNext = useCallback(async () => {
-    setIsBusy(true);
-    try {
-      await commitCurrent();
-      await goToPosition(positionRef.current + 1);
-    } catch {
-      setLoadError('Could not save your answer.');
-    } finally {
-      setIsBusy(false);
+  const goPrevious = useCallback(() => {
+    setViewPosition((previous) => Math.max(1, previous - 1));
+  }, []);
+
+  const goNext = useCallback(() => {
+    if (isReviewing) {
+      setViewPosition((previous) => Math.min(previous + 1, currentPosition));
+      return;
     }
-  }, [commitCurrent, goToPosition]);
 
-  const goPrevious = useCallback(async () => {
-    await goToPosition(positionRef.current - 1);
-  }, [goToPosition]);
+    void submitAndAdvance(selectedAnswer, false);
+  }, [currentPosition, isReviewing, selectedAnswer, submitAndAdvance]);
 
-  /** Skipping deliberately does not call /answer: leaving the position ASSIGNED
-   *  server-side is the only way it can be served again later. */
-  const skip = useCallback(async () => {
-    patchCurrent({ skipped: true });
-    await goToPosition(positionRef.current + 1);
-  }, [patchCurrent, goToPosition]);
+  const skipQuestion = useCallback(() => {
+    void submitAndAdvance(null, true);
+  }, [submitAndAdvance]);
 
-  const finish = useCallback(async () => {
-    setIsBusy(true);
+  /** Questions past the live one aren't fetchable — the backend hands them out
+   *  strictly in order — so jumping is clamped to what's already been seen. */
+  const jumpToQuestion = useCallback(
+    (position: number) => {
+      if (position < 1 || position > currentPosition) {
+        return;
+      }
+
+      setViewPosition(position);
+      setFurthestPosition((previous) => Math.max(previous, position));
+      setIsNavOpen(false);
+    },
+    [currentPosition]
+  );
+
+  const endSession = useCallback(async () => {
+    setIsLeaving(true);
+
     try {
-      await commitCurrent();
-      return await completePractice();
-    } catch {
-      setLoadError('Could not finish this session.');
-      return null;
+      await abandonPractice();
     } finally {
-      setIsBusy(false);
+      showToast(SESSION_ENDED_TOAST);
+      navigate(ROUTES.DASHBOARD);
     }
-  }, [commitCurrent]);
+  }, [navigate, showToast]);
+
+  const viewedAnswer = useMemo(
+    () => answers.find((entry) => entry.position === viewPosition) ?? null,
+    [answers, viewPosition]
+  );
+
+  const displayedQuestion = isReviewing && viewedAnswer ? viewedAnswer.question : question;
+
+  const segments = useMemo<SegmentState[]>(
+    () =>
+      Array.from({ length: totalQuestions }, (_, index) => {
+        const entry = answers.find((item) => item.position === index + 1);
+
+        if (!entry) {
+          return 'upcoming';
+        }
+
+        return entry.skipped ? 'skipped' : 'answered';
+      }),
+    [answers, totalQuestions]
+  );
+
+  const navItems = useMemo<NavItem[]>(
+    () =>
+      Array.from({ length: totalQuestions }, (_, index) => {
+        const position = index + 1;
+        const entry = answers.find((item) => item.position === position);
+        let state: NavItemState = 'locked';
+
+        if (entry) {
+          state = entry.skipped ? 'skipped' : 'answered';
+        } else if (position <= currentPosition) {
+          state = 'unanswered';
+        }
+
+        return { position, state, isCurrent: position === viewPosition };
+      }),
+    [answers, currentPosition, totalQuestions, viewPosition]
+  );
 
   return {
-    slots,
-    currentPosition,
-    current: slots[currentPosition - 1],
-    totalQuestions,
+    status,
+    errorMessage,
+    isMobile,
+    isPaused,
+    isNavOpen,
+    isReviewing,
+    isSubmitting,
+    /** True while a session is genuinely in progress — drives the exit guard. */
+    hasActiveSession: !isLeaving && displayedQuestion !== null,
+
+    question: displayedQuestion,
+    accent: getSessionAccent(displayedQuestion?.section),
+    selectedAnswer: isReviewing && viewedAnswer ? viewedAnswer.selectedAnswer : selectedAnswer,
+    confidence: isReviewing && viewedAnswer ? viewedAnswer.confidence : confidence,
+    questionSeconds: isReviewing && viewedAnswer ? viewedAnswer.timeSpentSeconds : questionSeconds,
     sessionSeconds,
-    isLoading,
-    isBusy,
-    loadError,
-    sessionEnded,
-    selectAnswer,
-    selectConfidence,
-    goToPosition,
-    goNext,
+
+    viewPosition,
+    currentPosition,
+    totalQuestions,
+    furthestPosition,
+    segments,
+    navItems,
+
+    canGoNext: isReviewing || selectedAnswer !== null,
+    hasPrevious: viewPosition > 1,
+    showSkip: !isReviewing,
+    nextLabel: isReviewing
+      ? NEXT_LABEL
+      : currentPosition === totalQuestions
+        ? FINISH_TEST_LABEL
+        : NEXT_QUESTION_LABEL,
+
+    selectAnswer: setSelectedAnswer,
+    selectConfidence: setConfidence,
     goPrevious,
-    skip,
-    finish,
-    retryLoad,
+    goNext,
+    skipQuestion,
+    jumpToQuestion,
+    openNav: () => setIsNavOpen(true),
+    closeNav: () => setIsNavOpen(false),
+    togglePause: () => setIsPaused((previous) => !previous),
+    retryLoad: loadSession,
+    endSession,
   };
 }

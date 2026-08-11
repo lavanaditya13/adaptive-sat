@@ -1,53 +1,69 @@
-import { Card } from '@workspace/ui/components/card';
-import { TITLE, NOT_SURE_CAPTION, VERY_CONFIDENT_CAPTION } from './ConfidenceSelector.constants';
+import { cn } from '@workspace/ui/lib/utils';
+import type { SessionAccent } from '@/components/practice/session-accent';
 import {
-  CARD_STYLES,
-  TITLE_STYLES,
-  BUTTONS_GRID_STYLES,
-  LEVEL_BUTTON_UNSELECTED_STYLES,
-  LEVEL_BUTTON_SELECTED_STYLES,
+  CONFIDENCE_LEVELS,
+  LEVEL_LABEL_PREFIX,
+  NOT_SURE_CAPTION,
+  TITLE,
+  VERY_CONFIDENT_CAPTION,
+} from './ConfidenceSelector.constants';
+import {
+  CAPTION_STYLES,
   CAPTIONS_ROW_STYLES,
+  CARD_STYLES,
+  LEVEL_BUTTON_SELECTED_STYLES,
+  LEVEL_BUTTON_STYLES,
+  LEVEL_BUTTON_UNSELECTED_STYLES,
+  LEVELS_ROW_STYLES,
+  TITLE_STYLES,
 } from './ConfidenceSelector.styles';
 
 interface ConfidenceSelectorProps {
   confidenceLevel: number;
   onSelectConfidence: (level: number) => void;
+  accent: SessionAccent;
   disabled?: boolean;
 }
-
-const LEVELS = [1, 2, 3, 4, 5];
 
 export function ConfidenceSelector({
   confidenceLevel,
   onSelectConfidence,
+  accent,
   disabled = false,
 }: ConfidenceSelectorProps) {
   return (
-    <Card className={CARD_STYLES}>
-      <span className={TITLE_STYLES}>{TITLE}</span>
+    <div className={CARD_STYLES}>
+      <p className={TITLE_STYLES}>{TITLE}</p>
 
-      <div className={BUTTONS_GRID_STYLES}>
-        {LEVELS.map((level) => (
-          <button
-            key={level}
-            type="button"
-            disabled={disabled}
-            onClick={() => onSelectConfidence(level)}
-            className={
-              confidenceLevel === level
-                ? LEVEL_BUTTON_SELECTED_STYLES
-                : LEVEL_BUTTON_UNSELECTED_STYLES
-            }
-          >
-            {level}
-          </button>
-        ))}
+      <div className={LEVELS_ROW_STYLES} role="group" aria-label={TITLE}>
+        {CONFIDENCE_LEVELS.map((level) => {
+          const isSelected = confidenceLevel === level;
+
+          return (
+            <button
+              key={level}
+              type="button"
+              disabled={disabled}
+              aria-pressed={isSelected}
+              aria-label={`${LEVEL_LABEL_PREFIX} ${level}`}
+              onClick={() => onSelectConfidence(level)}
+              className={cn(
+                LEVEL_BUTTON_STYLES,
+                isSelected
+                  ? cn(LEVEL_BUTTON_SELECTED_STYLES, accent.solidBg)
+                  : LEVEL_BUTTON_UNSELECTED_STYLES
+              )}
+            >
+              {level}
+            </button>
+          );
+        })}
       </div>
 
       <div className={CAPTIONS_ROW_STYLES}>
-        <span>{NOT_SURE_CAPTION}</span>
-        <span>{VERY_CONFIDENT_CAPTION}</span>
+        <p className={CAPTION_STYLES}>{NOT_SURE_CAPTION}</p>
+        <p className={CAPTION_STYLES}>{VERY_CONFIDENT_CAPTION}</p>
       </div>
-    </Card>
+    </div>
   );
 }

@@ -2,15 +2,31 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { QuestionsPage } from './QuestionsPage';
 import {
+  abandonPractice,
   completePractice,
   getCurrentQuestion,
   submitAnswer,
-  updateAttempt,
 } from '@/services/practice-service';
+import { useAppShellStore } from '@/store/app-shell-store';
 import { useResultsStore } from '@/store/results-store';
-import type { Question } from '@/types/api';
+import { MOCK_COMPLETE_RESPONSE, MOCK_QUESTIONS } from '@/mocks/mock-data';
+import { queryKeys } from '@/constants/query-keys';
+import { FINISH_TEST_LABEL, SKIP_LABEL } from '@/components/practice/SessionNavigation/SessionNavigation.constants';
+import {
+  LIVE_TIMER_LABEL,
+  OPEN_NAV_LABEL,
+  SESSION_TIMER_LABEL,
+} from '@/components/practice/SessionHeader/SessionHeader.constants';
+
+vi.mock('@/services/practice-service', () => ({
+  getCurrentQuestion: vi.fn(),
+  submitAnswer: vi.fn(),
+  completePractice: vi.fn(),
+  abandonPractice: vi.fn(),
+}));
 
 const navigateMock = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -18,179 +34,237 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => navigateMock };
 });
 
-vi.mock('@/services/practice-service', () => ({
-  getCurrentQuestion: vi.fn(),
-  submitAnswer: vi.fn(),
-  updateAttempt: vi.fn(),
-  completePractice: vi.fn(),
-}));
+function renderQuestionsPage() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
-function buildQuestion(id: number): Question {
-  return {
-    question_id: id,
-    prompt: `Question ${id} prompt`,
-    choices: { A: 'first', B: 'second', C: 'third', D: 'fourth' },
-    section: 'math',
-    topic_display_name: 'Algebra',
-  };
+  render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <QuestionsPage />
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+
+  return { invalidateQueriesSpy };
 }
 
-function renderPage() {
-  return render(
-    <MemoryRouter>
-      <QuestionsPage />
-    </MemoryRouter>
-  );
+/** Choice text can collide with the confidence buttons' bare numerals, so
+ *  options are always located through their A–D badge. */
+function clickOption(user: ReturnType<typeof userEvent.setup>, label: string) {
+  const option = screen.getByText(label).closest('button');
+  expect(option).not.toBeNull();
+  return user.click(option!);
 }
 
 describe('QuestionsPage', () => {
   beforeEach(() => {
-    navigateMock.mockReset();
     vi.mocked(getCurrentQuestion).mockReset();
     vi.mocked(submitAnswer).mockReset();
-    vi.mocked(updateAttempt).mockReset();
     vi.mocked(completePractice).mockReset();
-    useResultsStore.setState({ latestResult: null });
+    vi.mocked(abandonPractice).mockReset();
+    navigateMock.mockReset();
+    useResultsStore.getState().clearResults();
+    useAppShellStore.getState().setTrailingCrumbLabel(null);
+  });
 
+  it('renders the resumed question, counter and live timer', async () => {
     vi.mocked(getCurrentQuestion).mockResolvedValue({
+      question: MOCK_QUESTIONS[0],
       current_position: 1,
       total_questions: 3,
-      question: buildQuestion(1),
     });
+
+    renderQuestionsPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(MOCK_QUESTIONS[0].prompt)).toBeInTheDocument();
+    });
+    expect(screen.getByText('Question 1 of 3')).toBeInTheDocument();
+    // Both clocks tick on a real 1s interval, so assert the M:SS shape rather
+    // than a literal 0:00 that a slow run has already ticked past.
+    expect(screen.getByLabelText(SESSION_TIMER_LABEL)).toHaveTextContent(/^\d+:[0-5]\d total$/);
+    expect(screen.getByLabelText(LIVE_TIMER_LABEL)).toHaveTextContent(/^\d+:[0-5]\d$/);
+    // The breadcrumb can't derive the topic from the URL, so the page sets it.
+    expect(useAppShellStore.getState().trailingCrumbLabel).toBe(
+      MOCK_QUESTIONS[0].topic_display_name
+    );
+  });
+
+  it('submits the selected answer with its confidence rating and advances', async () => {
+    vi.mocked(getCurrentQuestion)
+      .mockResolvedValueOnce({
+        question: MOCK_QUESTIONS[0],
+        current_position: 1,
+        total_questions: 3,
+      })
+      .mockResolvedValueOnce({
+        question: MOCK_QUESTIONS[1],
+        current_position: 2,
+        total_questions: 3,
+      });
     vi.mocked(submitAnswer).mockResolvedValue({
       saved: true,
       answered_position: 1,
       remaining_questions: 2,
-      attempt_id: 55,
+      attempt_id: 501,
     });
-  });
-
-  it('renders the served question with its topic, prompt and choices', async () => {
-    renderPage();
-
-    expect(await screen.findByText('Question 1 prompt')).toBeInTheDocument();
-    expect(screen.getByText('Algebra')).toBeInTheDocument();
-    expect(screen.getByText('first')).toBeInTheDocument();
-    expect(screen.getByText('Q 1')).toBeInTheDocument();
-  });
-
-  it('will not advance until an answer is chosen', async () => {
-    renderPage();
-    await screen.findByText('Question 1 prompt');
-
-    expect(screen.getByRole('button', { name: /next question/i })).toBeDisabled();
-  });
-
-  it('submits the answer with its confidence, then moves on', async () => {
-    vi.mocked(getCurrentQuestion)
-      .mockResolvedValueOnce({
-        current_position: 1,
-        total_questions: 3,
-        question: buildQuestion(1),
-      })
-      .mockResolvedValueOnce({
-        current_position: 2,
-        total_questions: 3,
-        question: buildQuestion(2),
-      });
     const user = userEvent.setup();
-    renderPage();
 
-    await screen.findByText('Question 1 prompt');
-    await user.click(screen.getByText('second'));
-    await user.click(screen.getByRole('button', { name: /^5$/ }));
+    renderQuestionsPage();
+    await waitFor(() => {
+      expect(screen.getByText(MOCK_QUESTIONS[0].prompt)).toBeInTheDocument();
+    });
+
+    await clickOption(user, 'B');
+    await user.click(screen.getByRole('button', { name: 'Confidence 5' }));
     await user.click(screen.getByRole('button', { name: /next question/i }));
 
     await waitFor(() => {
-      expect(submitAnswer).toHaveBeenCalledWith('B', expect.any(Number), 5);
+      expect(screen.getByText(MOCK_QUESTIONS[1].prompt)).toBeInTheDocument();
     });
-    expect(await screen.findByText('Question 2 prompt')).toBeInTheDocument();
+    expect(submitAnswer).toHaveBeenCalledWith('B', expect.any(Number), 5);
+    expect(completePractice).not.toHaveBeenCalled();
   });
 
-  it('skips without answering so the question can be returned to later', async () => {
+  it('defaults confidence to 3 and records a skip as a null answer', async () => {
     vi.mocked(getCurrentQuestion)
       .mockResolvedValueOnce({
+        question: MOCK_QUESTIONS[0],
         current_position: 1,
         total_questions: 3,
-        question: buildQuestion(1),
       })
       .mockResolvedValueOnce({
+        question: MOCK_QUESTIONS[1],
         current_position: 2,
         total_questions: 3,
-        question: buildQuestion(2),
       });
+    vi.mocked(submitAnswer).mockResolvedValue({
+      saved: true,
+      answered_position: 1,
+      remaining_questions: 2,
+      attempt_id: 502,
+    });
     const user = userEvent.setup();
-    renderPage();
 
-    await screen.findByText('Question 1 prompt');
-    await user.click(screen.getByRole('button', { name: /skip/i }));
+    renderQuestionsPage();
+    await waitFor(() => {
+      expect(screen.getByText(MOCK_QUESTIONS[0].prompt)).toBeInTheDocument();
+    });
 
-    await waitFor(() => expect(screen.getByText('Question 2 prompt')).toBeInTheDocument());
-    // Skipping must not create an attempt, otherwise the slot locks server-side.
-    expect(submitAnswer).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: SKIP_LABEL }));
+
+    await waitFor(() => {
+      expect(submitAnswer).toHaveBeenCalledWith(null, expect.any(Number), 3);
+    });
   });
 
-  it('serves an already-answered question from cache and updates the attempt when changed', async () => {
+  it('jumps back to a submitted question in read-only review mode', async () => {
     vi.mocked(getCurrentQuestion)
       .mockResolvedValueOnce({
+        question: MOCK_QUESTIONS[0],
         current_position: 1,
         total_questions: 3,
-        question: buildQuestion(1),
       })
       .mockResolvedValueOnce({
+        question: MOCK_QUESTIONS[1],
         current_position: 2,
         total_questions: 3,
-        question: buildQuestion(2),
       });
-    vi.mocked(updateAttempt).mockResolvedValue({ saved: true, attempt_id: 55 });
+    vi.mocked(submitAnswer).mockResolvedValue({
+      saved: true,
+      answered_position: 1,
+      remaining_questions: 2,
+      attempt_id: 503,
+    });
     const user = userEvent.setup();
-    renderPage();
 
-    await screen.findByText('Question 1 prompt');
-    await user.click(screen.getByText('second'));
+    renderQuestionsPage();
+    await waitFor(() => {
+      expect(screen.getByText(MOCK_QUESTIONS[0].prompt)).toBeInTheDocument();
+    });
+
+    await clickOption(user, 'A');
     await user.click(screen.getByRole('button', { name: /next question/i }));
-    await screen.findByText('Question 2 prompt');
+    await waitFor(() => {
+      expect(screen.getByText(MOCK_QUESTIONS[1].prompt)).toBeInTheDocument();
+    });
 
-    // Back to the answered question — rendered from cache, no refetch (the backend
-    // 400s on an answered position), and flagged as a review.
-    await user.click(screen.getByRole('button', { name: /previous/i }));
-    expect(await screen.findByText('Question 1 prompt')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: OPEN_NAV_LABEL }));
+    await user.click(screen.getByRole('button', { name: '1' }));
+
+    // Back on question 1, locked, with the review banner shown.
+    await waitFor(() => {
+      expect(screen.getByText(MOCK_QUESTIONS[0].prompt)).toBeInTheDocument();
+    });
     expect(screen.getByText(/reviewing a past question/i)).toBeInTheDocument();
-
-    await user.click(screen.getByText('third'));
-    expect(screen.getByText(/changed from your original answer/i)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /^next$/i }));
-    await waitFor(() => expect(updateAttempt).toHaveBeenCalledWith(55, 'C'));
+    expect(screen.queryByRole('button', { name: SKIP_LABEL })).not.toBeInTheDocument();
+    expect(screen.getByText('Question 1 of 3')).toBeInTheDocument();
   });
 
-  it('completes the session from the last question and hands the result to results', async () => {
+  it('completes the session, stores the result and routes to results', async () => {
     vi.mocked(getCurrentQuestion).mockResolvedValue({
-      current_position: 2,
-      total_questions: 2,
-      question: buildQuestion(2),
+      question: MOCK_QUESTIONS[0],
+      current_position: 1,
+      total_questions: 1,
     });
     vi.mocked(submitAnswer).mockResolvedValue({
       saved: true,
-      answered_position: 2,
+      answered_position: 1,
       remaining_questions: 0,
-      attempt_id: 77,
+      attempt_id: 504,
     });
-    vi.mocked(completePractice).mockResolvedValue({
-      status: 'completed',
-      score: { correct: 1, incorrect: 1, total: 2, percentage: 50 },
-      average_confidence: 3.5,
-      question_breakdown: [],
-    });
+    vi.mocked(completePractice).mockResolvedValue(MOCK_COMPLETE_RESPONSE);
     const user = userEvent.setup();
-    renderPage();
 
-    await screen.findByText('Question 2 prompt');
-    await user.click(screen.getByText('first'));
-    await user.click(screen.getByRole('button', { name: /finish test/i }));
+    const { invalidateQueriesSpy } = renderQuestionsPage();
+    await waitFor(() => {
+      expect(screen.getByText(MOCK_QUESTIONS[0].prompt)).toBeInTheDocument();
+    });
 
-    await waitFor(() => expect(completePractice).toHaveBeenCalled());
-    expect(useResultsStore.getState().latestResult?.score.total).toBe(2);
-    expect(navigateMock).toHaveBeenCalledWith('/results');
+    await clickOption(user, 'C');
+    await user.click(screen.getByRole('button', { name: FINISH_TEST_LABEL }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/results');
+    });
+    expect(completePractice).toHaveBeenCalledTimes(1);
+    expect(useResultsStore.getState().latestResult).toEqual(MOCK_COMPLETE_RESPONSE);
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.dashboard.all });
+  });
+
+  it('surfaces a save failure and stays on the question', async () => {
+    vi.mocked(getCurrentQuestion).mockResolvedValue({
+      question: MOCK_QUESTIONS[0],
+      current_position: 1,
+      total_questions: 3,
+    });
+    vi.mocked(submitAnswer).mockRejectedValue(new Error('network error'));
+    const user = userEvent.setup();
+
+    renderQuestionsPage();
+    await waitFor(() => {
+      expect(screen.getByText(MOCK_QUESTIONS[0].prompt)).toBeInTheDocument();
+    });
+
+    await clickOption(user, 'A');
+    await user.click(screen.getByRole('button', { name: /next question/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Failed to save answer.');
+    });
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(screen.getByText(MOCK_QUESTIONS[0].prompt)).toBeInTheDocument();
+  });
+
+  it('keeps the student on a session that fails to load for a transient reason', async () => {
+    vi.mocked(getCurrentQuestion).mockRejectedValue(new Error('offline'));
+
+    renderQuestionsPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/couldn't load your session/i)).toBeInTheDocument();
+    });
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 });

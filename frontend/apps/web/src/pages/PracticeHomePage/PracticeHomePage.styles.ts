@@ -5,3 +5,4 @@ export const ICON_TILE_STYLES =
 export const TITLE_STYLES = 'text-[22px] font-extrabold text-ink';
 export const SUBTITLE_STYLES = 'mt-0.5 text-[13px] text-ink-muted';
 export const GRID_STYLES = 'grid grid-cols-1 gap-3.5 sm:grid-cols-2';
+export const CONFLICT_ACTIONS_STYLES = 'mt-3 flex gap-2';

@@ -1,240 +1,213 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, RotateCcw } from 'lucide-react';
-import { Button } from '@workspace/ui/components/button';
-import { QuestionCard } from '@/components/practice/QuestionCard/QuestionCard';
-import { ConfidenceSelector } from '@/components/practice/ConfidenceSelector/ConfidenceSelector';
-import { SessionHeader } from '@/components/practice/SessionHeader/SessionHeader';
-import { QuestionNavPanel } from '@/components/practice/QuestionNavPanel/QuestionNavPanel';
-import { getPracticeAccent } from '@/constants/practice-visuals';
-import { ROUTES } from '@/constants/routes';
-import { useAppShellStore } from '@/store/app-shell-store';
-import { useResultsStore } from '@/store/results-store';
-import { useQuestionSession } from './use-question-session';
+import { useEffect } from 'react';
+import { RotateCcw } from 'lucide-react';
+import { cn } from '@workspace/ui/lib/utils';
+import { Skeleton } from '@workspace/ui/components/skeleton';
 import {
-  buildQuestionPill,
-  CHANGED_PREFIX,
-  CHANGED_SUFFIX,
-  DEFAULT_CONFIDENCE,
-  FINISH_LABEL,
-  formatClock,
-  LOADING_LABEL,
-  NEXT_LABEL,
-  NEXT_REVIEW_LABEL,
-  PREVIOUS_LABEL,
-  RETRY_LABEL,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@workspace/ui/components/dialog';
+import { Button } from '@workspace/ui/components/button';
+import { ConfidenceSelector } from '@/components/practice/ConfidenceSelector/ConfidenceSelector';
+import { QuestionCard } from '@/components/practice/QuestionCard/QuestionCard';
+import { QuestionNavPanel } from '@/components/practice/QuestionNavPanel/QuestionNavPanel';
+import { SessionHeader } from '@/components/practice/SessionHeader/SessionHeader';
+import { SessionNavigation } from '@/components/practice/SessionNavigation/SessionNavigation';
+import { useNavigationGuard } from '@/hooks/use-navigation-guard';
+import { useAppShellStore } from '@/store/app-shell-store';
+import {
+  END_SESSION_BUTTON_LABEL,
+  EXIT_DIALOG_CANCEL,
+  EXIT_DIALOG_CONFIRM,
+  EXIT_DIALOG_DESCRIPTION,
+  EXIT_DIALOG_TITLE,
+  PAUSED_DESCRIPTION,
+  PAUSED_TITLE,
+  RESUME_BUTTON_LABEL,
+  RESUME_ERROR_DESCRIPTION,
+  RESUME_ERROR_TITLE,
+  RESUME_RETRY_LABEL,
   REVIEW_BANNER_TEXT,
-  SESSION_ENDED_MESSAGE,
-  SESSION_ENDED_TITLE,
-  SKIP_LABEL,
-  TOTAL_SUFFIX,
 } from './QuestionsPage.constants';
 import {
-  CHANGED_PILL_STYLES,
-  CHANGED_PILL_TEXT_STYLES,
   CONTAINER_STYLES,
-  FOOTER_ACTIONS_STYLES,
-  FOOTER_ROW_STYLES,
-  HEADER_ROW_STYLES,
-  NEXT_BUTTON_STYLES,
-  PREV_BUTTON_STYLES,
+  ERROR_BANNER_STYLES,
+  PAUSED_ACTIONS_STYLES,
+  PAUSED_DESCRIPTION_STYLES,
+  PAUSED_END_BUTTON_STYLES,
+  PAUSED_PANEL_STYLES,
+  PAUSED_RESUME_BUTTON_STYLES,
+  PAUSED_TITLE_STYLES,
+  RESUME_ERROR_DESCRIPTION_STYLES,
+  RESUME_ERROR_PANEL_STYLES,
+  RESUME_ERROR_TITLE_STYLES,
+  RESUME_RETRY_BUTTON_STYLES,
   REVIEW_BANNER_STYLES,
   REVIEW_BANNER_TEXT_STYLES,
-  SKIP_BUTTON_STYLES,
-  SPACER_STYLES,
-  STATE_MESSAGE_STYLES,
-  STATE_PANEL_STYLES,
-  STATE_TITLE_STYLES,
+  SKELETON_HEADER_STYLES,
+  SKELETON_OPTION_STYLES,
+  SKELETON_PROMPT_STYLES,
 } from './QuestionsPage.styles';
+import { useQuestionSession } from './use-question-session';
 
 export function QuestionsPage() {
-  const navigate = useNavigate();
+  const session = useQuestionSession();
   const setTrailingCrumbLabel = useAppShellStore((state) => state.setTrailingCrumbLabel);
-  const setLatestResult = useResultsStore((state) => state.setLatestResult);
-  const [navOpen, setNavOpen] = useState(false);
 
-  const {
-    slots,
-    current,
-    currentPosition,
-    totalQuestions,
-    sessionSeconds,
-    isLoading,
-    isBusy,
-    loadError,
-    sessionEnded,
-    selectAnswer,
-    selectConfidence,
-    goToPosition,
-    goNext,
-    goPrevious,
-    skip,
-    finish,
-    retryLoad,
-  } = useQuestionSession();
-
-  const question = current?.question ?? null;
+  const { showExitDialog, confirmNavigation, handleConfirmExit, handleCancelExit } =
+    useNavigationGuard(session.hasActiveSession && !session.isSubmitting);
 
   // The session target isn't in the URL, so the breadcrumb can't derive it.
+  const topicLabel = session.question?.topic_display_name ?? null;
+
   useEffect(() => {
-    if (question) {
-      setTrailingCrumbLabel(question.topic_display_name);
-    }
+    setTrailingCrumbLabel(topicLabel);
 
     return () => setTrailingCrumbLabel(null);
-  }, [question, setTrailingCrumbLabel]);
+  }, [setTrailingCrumbLabel, topicLabel]);
 
-  const handleFinish = async () => {
-    const result = await finish();
-    if (result) {
-      setLatestResult(result);
-      navigate(ROUTES.RESULTS);
-    }
-  };
-
-  if (isLoading) {
+  if (session.status === 'loading') {
     return (
-      <div className={STATE_PANEL_STYLES}>
-        <p className={STATE_TITLE_STYLES}>{LOADING_LABEL}</p>
+      <div className={CONTAINER_STYLES}>
+        <Skeleton className={SKELETON_HEADER_STYLES} />
+        <Skeleton className={SKELETON_PROMPT_STYLES} />
+        <Skeleton className={SKELETON_OPTION_STYLES} />
+        <Skeleton className={SKELETON_OPTION_STYLES} />
+        <Skeleton className={SKELETON_OPTION_STYLES} />
       </div>
     );
   }
 
-  if (sessionEnded || (!question && !loadError)) {
+  if (session.status === 'resume-error') {
     return (
-      <div className={STATE_PANEL_STYLES}>
-        <p className={STATE_TITLE_STYLES}>{SESSION_ENDED_TITLE}</p>
-        <p className={STATE_MESSAGE_STYLES}>{SESSION_ENDED_MESSAGE}</p>
-        <Button className="mt-4" onClick={handleFinish} disabled={isBusy}>
-          {FINISH_LABEL}
-        </Button>
-      </div>
-    );
-  }
-
-  if (!question) {
-    return (
-      <div className={STATE_PANEL_STYLES}>
-        <p className={STATE_TITLE_STYLES}>{loadError}</p>
-        <Button className="mt-4" onClick={() => void retryLoad()}>
-          {RETRY_LABEL}
-        </Button>
-      </div>
-    );
-  }
-
-  const accent = getPracticeAccent(question.section);
-  const isLastQuestion = totalQuestions > 0 && currentPosition >= totalQuestions;
-  // "Reviewing" means this slot was already committed to the server — the student
-  // is revisiting it rather than answering it for the first time.
-  const isReviewing = Boolean(current?.answered);
-  const showChangedPill =
-    isReviewing &&
-    current?.firstSubmittedAnswer != null &&
-    current.selectedAnswer !== current.firstSubmittedAnswer;
-  const canAdvance = isReviewing || current?.selectedAnswer != null;
-
-  return (
-    <div className={CONTAINER_STYLES}>
-      <div className={HEADER_ROW_STYLES}>
-        <SessionHeader
-          questionLabel={buildQuestionPill(currentPosition)}
-          questionTime={formatClock(current?.timeSpentSeconds ?? 0)}
-          sessionTime={formatClock(sessionSeconds)}
-          totalSuffix={TOTAL_SUFFIX}
-          accentText={accent.text}
-          accentBorder={accent.border}
-          accentTint={accent.tint}
-          accentDot={accent.solid}
-          onOpenNav={() => setNavOpen(true)}
-        />
-      </div>
-
-      {isReviewing && (
-        <div className={REVIEW_BANNER_STYLES}>
-          <RotateCcw className="size-3.5 shrink-0 text-warning" aria-hidden="true" />
-          <span className={REVIEW_BANNER_TEXT_STYLES}>{REVIEW_BANNER_TEXT}</span>
-        </div>
-      )}
-
-      {navOpen && (
-        <QuestionNavPanel
-          items={slots.map((slot) => ({
-            position: slot.position,
-            answered: slot.answered,
-            skipped: slot.skipped,
-            seen: slot.question !== null,
-          }))}
-          currentPosition={currentPosition}
-          accentSolid={accent.solid}
-          accentRing={accent.border}
-          onSelect={(position) => {
-            setNavOpen(false);
-            void goToPosition(position);
-          }}
-          onClose={() => setNavOpen(false)}
-        />
-      )}
-
-      <QuestionCard
-        question={question}
-        selectedAnswer={current?.selectedAnswer ?? null}
-        onSelectAnswer={selectAnswer}
-        disabled={isBusy}
-      />
-
-      {showChangedPill && (
-        <div className={CHANGED_PILL_STYLES}>
-          <span className={CHANGED_PILL_TEXT_STYLES}>
-            {CHANGED_PREFIX}
-            {current?.firstSubmittedAnswer}
-            {CHANGED_SUFFIX}
-          </span>
-        </div>
-      )}
-
-      <div className={SPACER_STYLES}>
-        <ConfidenceSelector
-          confidenceLevel={current?.confidence ?? DEFAULT_CONFIDENCE}
-          onSelectConfidence={selectConfidence}
-          disabled={isBusy || isReviewing}
-        />
-      </div>
-
-      <div className={FOOTER_ROW_STYLES}>
-        <button
-          type="button"
-          className={PREV_BUTTON_STYLES}
-          onClick={() => void goPrevious()}
-          disabled={currentPosition <= 1 || isBusy}
-        >
-          <ArrowLeft className="size-[15px]" aria-hidden="true" />
-          {PREVIOUS_LABEL}
-        </button>
-
-        <div className={FOOTER_ACTIONS_STYLES}>
-          {!isReviewing && !isLastQuestion && (
-            <button
-              type="button"
-              className={SKIP_BUTTON_STYLES}
-              onClick={() => void skip()}
-              disabled={isBusy}
-            >
-              {SKIP_LABEL}
-            </button>
-          )}
-
+      <div className={CONTAINER_STYLES}>
+        <div className={RESUME_ERROR_PANEL_STYLES}>
+          <h1 className={RESUME_ERROR_TITLE_STYLES}>{RESUME_ERROR_TITLE}</h1>
+          <p className={RESUME_ERROR_DESCRIPTION_STYLES}>{RESUME_ERROR_DESCRIPTION}</p>
           <button
             type="button"
-            className={`${NEXT_BUTTON_STYLES} ${accent.button}`}
-            onClick={() => (isLastQuestion ? void handleFinish() : void goNext())}
-            disabled={!canAdvance || isBusy}
+            onClick={session.retryLoad}
+            className={RESUME_RETRY_BUTTON_STYLES}
           >
-            {isLastQuestion ? FINISH_LABEL : isReviewing ? NEXT_REVIEW_LABEL : NEXT_LABEL}
-            {!isLastQuestion && <ArrowRight className="size-[15px]" aria-hidden="true" />}
+            <RotateCcw className="mr-2 inline size-[15px]" aria-hidden="true" />
+            {RESUME_RETRY_LABEL}
           </button>
         </div>
       </div>
+    );
+  }
+
+  if (!session.question) {
+    return null;
+  }
+
+  return (
+    <div className={CONTAINER_STYLES}>
+      <SessionHeader
+        currentPosition={session.viewPosition}
+        totalQuestions={session.totalQuestions}
+        questionSeconds={session.questionSeconds}
+        sessionSeconds={session.sessionSeconds}
+        segments={session.segments}
+        accent={session.accent}
+        isPaused={session.isPaused}
+        onOpenNav={session.openNav}
+        onTogglePause={session.togglePause}
+      />
+
+      {session.isPaused ? (
+        <div className={PAUSED_PANEL_STYLES}>
+          <h2 className={PAUSED_TITLE_STYLES}>{PAUSED_TITLE}</h2>
+          <p className={PAUSED_DESCRIPTION_STYLES}>{PAUSED_DESCRIPTION}</p>
+          <div className={PAUSED_ACTIONS_STYLES}>
+            <button
+              type="button"
+              onClick={session.togglePause}
+              className={cn(PAUSED_RESUME_BUTTON_STYLES, session.accent.buttonBg)}
+            >
+              {RESUME_BUTTON_LABEL}
+            </button>
+            <button
+              type="button"
+              onClick={() => confirmNavigation(() => void session.endSession())}
+              className={PAUSED_END_BUTTON_STYLES}
+            >
+              {END_SESSION_BUTTON_LABEL}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {session.isReviewing && (
+            <div className={REVIEW_BANNER_STYLES}>
+              <RotateCcw className="size-3.5 shrink-0 text-warning" aria-hidden="true" />
+              <span className={REVIEW_BANNER_TEXT_STYLES}>{REVIEW_BANNER_TEXT}</span>
+            </div>
+          )}
+
+          {session.errorMessage && (
+            <p className={ERROR_BANNER_STYLES} role="alert">
+              {session.errorMessage}
+            </p>
+          )}
+
+          <QuestionCard
+            question={session.question}
+            selectedAnswer={session.selectedAnswer}
+            onSelectAnswer={session.selectAnswer}
+            accent={session.accent}
+            disabled={session.isReviewing || session.isSubmitting}
+          />
+
+          <ConfidenceSelector
+            confidenceLevel={session.confidence}
+            onSelectConfidence={session.selectConfidence}
+            accent={session.accent}
+            disabled={session.isReviewing || session.isSubmitting}
+          />
+
+          <SessionNavigation
+            hasPrevious={session.hasPrevious}
+            canGoNext={session.canGoNext}
+            showSkip={session.showSkip}
+            nextLabel={session.nextLabel}
+            isSubmitting={session.isSubmitting}
+            accent={session.accent}
+            onPrevious={session.goPrevious}
+            onSkip={session.skipQuestion}
+            onNext={session.goNext}
+          />
+        </>
+      )}
+
+      <QuestionNavPanel
+        open={session.isNavOpen}
+        items={session.navItems}
+        accent={session.accent}
+        isMobile={session.isMobile}
+        onSelect={session.jumpToQuestion}
+        onClose={session.closeNav}
+      />
+
+      <Dialog open={showExitDialog} onOpenChange={handleCancelExit}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{EXIT_DIALOG_TITLE}</DialogTitle>
+            <DialogDescription>{EXIT_DIALOG_DESCRIPTION}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCancelExit}>
+              {EXIT_DIALOG_CANCEL}
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmExit}>
+              {EXIT_DIALOG_CONFIRM}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -3,11 +3,23 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AxiosError, AxiosHeaders } from 'axios';
 import { PracticeHomePage } from './PracticeHomePage';
 import { getSkillTree } from '@/services/skill-tree-service';
-import { startPractice } from '@/services/practice-service';
+import { abandonPractice, selectSection, startPractice } from '@/services/practice-service';
 import { useAppShellStore } from '@/store/app-shell-store';
 import type { SkillTreeResponse } from '@/types/api';
+
+function axiosErrorWithStatus(status: number): AxiosError {
+  const config = { headers: new AxiosHeaders() };
+  return new AxiosError('failed', String(status), config, undefined, {
+    status,
+    statusText: '',
+    headers: {},
+    config,
+    data: {},
+  });
+}
 
 const navigateMock = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -21,6 +33,8 @@ vi.mock('@/services/skill-tree-service', () => ({
 
 vi.mock('@/services/practice-service', () => ({
   startPractice: vi.fn(),
+  selectSection: vi.fn(),
+  abandonPractice: vi.fn(),
 }));
 
 const MATH_TREE: SkillTreeResponse = {
@@ -69,7 +83,17 @@ describe('PracticeHomePage', () => {
     navigateMock.mockReset();
     vi.mocked(getSkillTree).mockResolvedValue(MATH_TREE);
     vi.mocked(startPractice).mockReset();
+    vi.mocked(abandonPractice).mockReset();
+    vi.mocked(selectSection).mockReset();
+    vi.mocked(selectSection).mockResolvedValue({ practice_options: [], topics: [] });
     useAppShellStore.setState({ toastMessage: null });
+  });
+
+  it('registers the section context on mount so a later start can resolve its section', async () => {
+    renderPage();
+
+    // math is section id 1 in the backend's SECTION_CODES map.
+    await waitFor(() => expect(selectSection).toHaveBeenCalledWith(1));
   });
 
   it('renders subject header stats and both practice mode cards', async () => {
@@ -104,9 +128,41 @@ describe('PracticeHomePage', () => {
     await user.click(screen.getByText('Start Practice'));
 
     await waitFor(() => {
-      expect(startPractice).toHaveBeenCalledWith({ mode: 'section' });
+      expect(startPractice).toHaveBeenCalledWith({ section_id: 1, mode: 'section' });
     });
     expect(navigateMock).toHaveBeenCalledWith('/practice/session');
+  });
+
+  it('offers resume or start-over when a session is already in progress', async () => {
+    vi.mocked(startPractice).mockRejectedValue(axiosErrorWithStatus(409));
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() => screen.getByText('Start Practice'));
+    await user.click(screen.getByText('Start Practice'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/already have a session in progress/i)).toBeInTheDocument();
+    });
+    expect(navigateMock).not.toHaveBeenCalled();
+
+    await user.click(screen.getByText('Resume session'));
+    expect(navigateMock).toHaveBeenCalledWith('/practice/session');
+  });
+
+  it('discards the in-progress session and retries when starting over', async () => {
+    vi.mocked(startPractice).mockRejectedValueOnce(axiosErrorWithStatus(409));
+    vi.mocked(abandonPractice).mockResolvedValue({ status: 'abandoned' });
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() => screen.getByText('Start Practice'));
+    await user.click(screen.getByText('Start Practice'));
+    await waitFor(() => screen.getByText('Start over'));
+    await user.click(screen.getByText('Start over'));
+
+    await waitFor(() => expect(abandonPractice).toHaveBeenCalled());
+    expect(startPractice).toHaveBeenCalledTimes(2);
   });
 
   it('navigates to the domains list from the "Practice by Topic" card', async () => {
