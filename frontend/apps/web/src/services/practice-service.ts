@@ -9,6 +9,7 @@ import type {
   AbandonResponse,
   QuestionResponse,
   CompleteResponse,
+  UpdateAttemptResponse,
 } from '@/types/api';
 
 export interface StartPracticePayload {
@@ -128,4 +129,15 @@ export async function completePractice(): Promise<CompleteResponse> {
     console.warn('API completePractice failed, returning mock fallback response:', error);
     return mockHandlers.completePractice();
   }
+}
+
+export async function updateAttempt(
+  attemptId: number,
+  selectedAnswer: string | null
+): Promise<UpdateAttemptResponse> {
+  const response = await apiClient.put<UpdateAttemptResponse>(
+    API.PRACTICE.ATTEMPT_UPDATE(attemptId),
+    { selected_answer: selectedAnswer }
+  );
+  return response.data;
 }

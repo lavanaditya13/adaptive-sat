@@ -48,7 +48,7 @@ export const mockHandlers = {
   },
 
   submitAnswer: async (
-    _selectedAnswer: string,
+    _selectedAnswer: string | null,
     _timeSpentSeconds: number,
     _confidenceLevel: number
   ): Promise<AnswerResponse> => {
@@ -59,6 +59,7 @@ export const mockHandlers = {
       saved: true,
       answered_position: answeredPos,
       remaining_questions: remaining,
+      attempt_id: answeredPos,
     };
   },
 

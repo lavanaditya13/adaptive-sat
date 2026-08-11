@@ -1,8 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ClipboardList, TrendingUp, Flame, LogOut, Settings as SettingsIcon } from 'lucide-react';
-import { Button } from '@workspace/ui/components/button';
+import { useQuery } from '@tanstack/react-query';
+import { CheckCircle2, ClipboardList, TrendingUp, Flame } from 'lucide-react';
 import { Skeleton } from '@workspace/ui/components/skeleton';
 import { StatCard } from '@/components/dashboard/StatCard/StatCard';
 import { WeakTopicsList } from '@/components/dashboard/WeakTopicsList/WeakTopicsList';
@@ -11,20 +9,14 @@ import { EstimatedScoreCard } from '@/components/dashboard/EstimatedScoreCard/Es
 import { PracticeModal } from '@/components/dashboard/PracticeModal/PracticeModal';
 import { EmailVerificationBanner } from '@/components/dashboard/EmailVerificationBanner/EmailVerificationBanner';
 import { getDashboard } from '@/services/dashboard-service';
-import { logout } from '@/services/auth-service';
 import { useAuthStore } from '@/store/auth-store';
-import { usePracticeSessionStore } from '@/store/practice-session-store';
-import { useResultsStore } from '@/store/results-store';
 import { queryKeys } from '@/constants/query-keys';
-import { ROUTES } from '@/constants/routes';
 import { getApiErrorDetail } from '@/utils/api-errors';
 import type { DashboardResponse } from '@/types/api';
 import {
   GREETING_EYEBROW,
   GREETING_PREFIX,
   GREETING_EXCLAMATION,
-  LOGOUT_LABEL,
-  SETTINGS_LABEL,
   SECTIONS_TITLE,
   QUESTIONS_CORRECT_LABEL,
   QUESTIONS_CORRECT_SUBTEXT_PREFIX,
@@ -40,10 +32,6 @@ import {
 } from './DashboardPage.constants';
 import {
   CONTAINER_STYLES,
-  HEADER_ROW_STYLES,
-  HEADER_ACTIONS_STYLES,
-  LOGOUT_BUTTON_STYLES,
-  SETTINGS_BUTTON_STYLES,
   GREETING_EYEBROW_STYLES,
   GREETING_STYLES,
   STATS_GRID_STYLES,
@@ -62,12 +50,7 @@ type DashboardSection = DashboardResponse['sections'][number];
 // note: weak_topics has no section_id, so it can't deep-link into topic practice yet without another backend field
 
 export function DashboardPage() {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
-  const clearUser = useAuthStore((state) => state.clearUser);
-  const resetPracticeSession = usePracticeSessionStore((state) => state.resetSession);
-  const clearResults = useResultsStore((state) => state.clearResults);
 
   const {
     data: dashboard,
@@ -84,21 +67,6 @@ export function DashboardPage() {
   const handleOpenSection = (section: DashboardSection) => {
     setActiveSection(section);
     setModalKey((key) => key + 1);
-  };
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch {
-      // Log out locally regardless of whether the server-side call succeeded.
-    } finally {
-      clearUser();
-      resetPracticeSession();
-      clearResults();
-      queryClient.removeQueries({ queryKey: queryKeys.auth.user });
-      queryClient.removeQueries({ queryKey: queryKeys.dashboard.all });
-      navigate(ROUTES.LOGIN);
-    }
   };
 
   if (isLoading) {
@@ -140,38 +108,13 @@ export function DashboardPage() {
     <div className={CONTAINER_STYLES}>
       {user?.email_verified === false && <EmailVerificationBanner />}
 
-      <div className={HEADER_ROW_STYLES}>
-        <div>
-          <p className={GREETING_EYEBROW_STYLES}>{GREETING_EYEBROW}</p>
-          <h1 className={GREETING_STYLES}>
-            {GREETING_PREFIX}
-            {dashboard.student.full_name}
-            {GREETING_EXCLAMATION}
-          </h1>
-        </div>
-
-        <div className={HEADER_ACTIONS_STYLES}>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={SETTINGS_BUTTON_STYLES}
-            aria-label={SETTINGS_LABEL}
-            title={SETTINGS_LABEL}
-            onClick={() => navigate(ROUTES.SETTINGS)}
-          >
-            <SettingsIcon className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={LOGOUT_BUTTON_STYLES}
-            aria-label={LOGOUT_LABEL}
-            title={LOGOUT_LABEL}
-            onClick={handleLogout}
-          >
-            <LogOut className="size-4" />
-          </Button>
-        </div>
+      <div>
+        <p className={GREETING_EYEBROW_STYLES}>{GREETING_EYEBROW}</p>
+        <h1 className={GREETING_STYLES}>
+          {GREETING_PREFIX}
+          {dashboard.student.full_name}
+          {GREETING_EXCLAMATION}
+        </h1>
       </div>
 
       <div className={STATS_GRID_STYLES}>

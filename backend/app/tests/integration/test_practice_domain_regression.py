@@ -19,6 +19,7 @@ behavior belongs in the matching tests/services/test_*.py file instead.
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 import pytest
@@ -26,6 +27,7 @@ import pytest_asyncio
 from fastapi import HTTPException
 from sqlalchemy import select
 
+from app.core.constants import IdempotentEndpoint
 from app.core.database import SessionLocal
 from app.models.attempt import Attempt
 from app.models.practice_session import PracticeSession
@@ -34,8 +36,14 @@ from app.models.question import Question
 from app.models.study_plan import StudyPlan
 from app.models.topic import Topic
 from app.models.user import User
-from app.schemas.practice import PracticeStartRequest, SubmitAnswerRequest
+from app.schemas.practice import (
+    PracticeStartRequest,
+    PracticeStartResponse,
+    SubmitAnswerRequest,
+    SubmitAnswerResponse,
+)
 from app.services import practice_service, skill_scoring_service
+from app.services.idempotency_service import compute_request_fingerprint, run_idempotent
 
 MATH_SECTION_ID = 1
 WEAK_TOPIC_CODE = "REGR_WEAK_TOPIC"
@@ -301,3 +309,188 @@ async def test_adaptive_unlock_after_three_completed_section_sessions(student, s
     adaptive_option = next(option for option in selection.practice_options if option.mode == "adaptive")
     assert adaptive_option.is_locked is False
     assert adaptive_option.unlock_requirement is None
+
+
+@pytest.mark.asyncio
+async def test_concurrent_submit_answer_does_not_double_count_or_skip(student, seeded_questions):
+    """Two overlapping submit_answer calls for the same session (a
+    double-clicked "Next", or a retried request) used to both read the same
+    next-assigned PracticeSessionQuestion before either wrote back -- see
+    practice_service._get_next_assigned_question's for_update lock. Fires
+    both concurrently, against real separate connections/transactions, so
+    the lock actually has something to serialize.
+    """
+    await _select_math_section(student)
+
+    async with _request_scoped_session() as db:
+        await practice_service.start_practice_session(
+            db, PracticeStartRequest(mode="section", question_count=1), student
+        )
+
+    async def _submit():
+        async with _request_scoped_session() as db:
+            return await practice_service.submit_answer(
+                db,
+                student,
+                SubmitAnswerRequest(
+                    selected_answer=CORRECT_ANSWER, time_spent_seconds=10, confidence_level=3
+                ),
+            )
+
+    results = await asyncio.gather(_submit(), _submit(), return_exceptions=True)
+
+    successes = [r for r in results if isinstance(r, practice_service.SubmitAnswerResponse)]
+    failures = [r for r in results if isinstance(r, HTTPException)]
+
+    assert len(successes) == 1, f"expected exactly one submission to win the race, got {results}"
+    assert len(failures) == 1
+    # Blocked by the row lock until the winner commits, the loser re-reads
+    # the now-"answered" row, finds no next question, and gets the same 400
+    # a legitimate late submit_answer call would -- not a 409 from racing
+    # the winner to insert an Attempt (the pre-existing unique-index path).
+    assert failures[0].status_code == 400
+
+    async with SessionLocal() as db:
+        attempts = (
+            await db.execute(select(Attempt).where(Attempt.student_id == student.id))
+        ).scalars().all()
+        assert len(attempts) == 1  # no double-count
+
+        session_row = (
+            await db.execute(select(PracticeSession).where(PracticeSession.student_id == student.id))
+        ).scalar_one()
+        # The one question got answered, not left stranded "assigned" --
+        # and the session correctly advanced instead of getting stuck
+        # in_progress with nothing left to answer.
+        assert session_row.status == "ready_to_complete"
+
+        session_question = (
+            await db.execute(
+                select(PracticeSessionQuestion).where(
+                    PracticeSessionQuestion.practice_session_id == session_row.id
+                )
+            )
+        ).scalar_one()
+        assert session_question.status == "answered"  # no skipped question
+
+
+async def _start_with_key(student: User, key: str) -> PracticeStartResponse:
+    """What the /start endpoint does end-to-end: real start_practice_session
+    wrapped by the real run_idempotent, exactly as practice.py wires them --
+    not a stand-in for either.
+    """
+    request = PracticeStartRequest(mode="section", question_count=4)
+    async with _request_scoped_session() as db:
+        return await run_idempotent(
+            db,
+            student_id=student.id,
+            endpoint=IdempotentEndpoint.PRACTICE_START,
+            idempotency_key=key,
+            request_fingerprint=compute_request_fingerprint(request),
+            response_model=PracticeStartResponse,
+            execute=lambda: practice_service.start_practice_session(db, request, student),
+        )
+
+
+@pytest.mark.asyncio
+async def test_retried_start_with_same_idempotency_key_returns_original_session_not_a_duplicate(
+    student, seeded_questions
+):
+    """Direct test of this ticket's acceptance criterion for /practice/start:
+    a retried request with the same Idempotency-Key gets the original
+    result back instead of creating a second PracticeSession.
+    """
+    await _select_math_section(student)
+    key = "start-retry-key"
+
+    first = await _start_with_key(student, key)
+    second = await _start_with_key(student, key)
+
+    assert first == second
+
+    async with SessionLocal() as db:
+        sessions = (
+            await db.execute(select(PracticeSession).where(PracticeSession.student_id == student.id))
+        ).scalars().all()
+    assert len(sessions) == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_start_with_same_idempotency_key_creates_exactly_one_session(
+    student, seeded_questions
+):
+    """The retry-safety property has to hold under real concurrency, not
+    just sequential retries -- two /start calls fired together (a
+    double-click, or a client retry racing the original that's still in
+    flight) with the same key must still produce exactly one session.
+    """
+    await _select_math_section(student)
+    key = "start-concurrent-key"
+
+    results = await asyncio.gather(
+        _start_with_key(student, key), _start_with_key(student, key), return_exceptions=True
+    )
+
+    successes = [r for r in results if isinstance(r, PracticeStartResponse)]
+    failures = [r for r in results if isinstance(r, HTTPException)]
+
+    # Either both calls end up with the same replayed response (if the
+    # second ran after the first fully committed), or the second is
+    # rejected as still-in-progress (if it raced the first) -- both are
+    # safe outcomes. What must never happen is two successes with
+    # different session state, or a duplicate row.
+    assert len(successes) + len(failures) == 2
+    if len(successes) == 2:
+        assert successes[0] == successes[1]
+    if failures:
+        assert failures[0].status_code == 409
+
+    async with SessionLocal() as db:
+        sessions = (
+            await db.execute(select(PracticeSession).where(PracticeSession.student_id == student.id))
+        ).scalars().all()
+    assert len(sessions) == 1
+
+
+@pytest.mark.asyncio
+async def test_retried_answer_with_same_idempotency_key_does_not_create_duplicate_attempt(
+    student, seeded_questions
+):
+    """Direct test of this ticket's acceptance criterion for
+    /practice/answer: a retried request with the same Idempotency-Key gets
+    the original result back instead of recording a second Attempt.
+    """
+    await _select_math_section(student)
+
+    async with _request_scoped_session() as db:
+        await practice_service.start_practice_session(
+            db, PracticeStartRequest(mode="section", question_count=4), student
+        )
+
+    answer_request = SubmitAnswerRequest(
+        selected_answer=CORRECT_ANSWER, time_spent_seconds=10, confidence_level=3
+    )
+    key = "answer-retry-key"
+
+    async def _answer_with_key() -> SubmitAnswerResponse:
+        async with _request_scoped_session() as db:
+            return await run_idempotent(
+                db,
+                student_id=student.id,
+                endpoint=IdempotentEndpoint.PRACTICE_ANSWER,
+                idempotency_key=key,
+                request_fingerprint=compute_request_fingerprint(answer_request),
+                response_model=SubmitAnswerResponse,
+                execute=lambda: practice_service.submit_answer(db, student, answer_request),
+            )
+
+    first = await _answer_with_key()
+    second = await _answer_with_key()
+
+    assert first == second
+
+    async with SessionLocal() as db:
+        attempts = (
+            await db.execute(select(Attempt).where(Attempt.student_id == student.id))
+        ).scalars().all()
+    assert len(attempts) == 1

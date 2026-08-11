@@ -1,8 +1,13 @@
+/* GET returns the session user; PATCH updates that same record and responds
+   with the identical shape, so both share one path constant. */
+const AUTH_ME = '/api/v1/auth/me';
+
 export const API = {
   AUTH: {
     SIGNUP: '/api/v1/auth/signup',
     LOGIN: '/api/v1/auth/login',
-    ME: '/api/v1/auth/me',
+    ME: AUTH_ME,
+    UPDATE_PROFILE: AUTH_ME,
     LOGOUT: '/api/v1/auth/logout',
     GOOGLE_START: '/api/v1/auth/google',
     VERIFY_EMAIL: '/api/v1/auth/verify-email',
@@ -24,6 +29,7 @@ export const API = {
        Takes ?section=math|reading_writing; omitted falls back to the
        student's last SELECT_SECTION choice. Responds in camelCase. */
     SKILL_TREE: '/api/v1/practice/skill-tree',
+    ATTEMPT_UPDATE: (id: number) => `/api/v1/practice/attempts/${id}`,
   },
   SETTINGS: {
     CONNECTED_PROVIDERS: '/api/v1/settings/connected-providers',

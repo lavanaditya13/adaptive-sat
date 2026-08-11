@@ -24,6 +24,19 @@ export async function getCurrentUser(): Promise<User> {
   return response.data;
 }
 
+export interface UpdateProfilePayload {
+  first_name: string;
+  last_name: string;
+}
+
+// Deliberately not wrapped in the mock fallback the read endpoints use: this
+// is a write, and falling back to a fixture would report a save that never
+// reached the server -- the exact failure mode this endpoint exists to fix.
+export async function updateProfile(payload: UpdateProfilePayload): Promise<User> {
+  const response = await apiClient.patch<User>(API.AUTH.UPDATE_PROFILE, payload);
+  return response.data;
+}
+
 export async function logout(): Promise<void> {
   await apiClient.post(API.AUTH.LOGOUT);
 }
