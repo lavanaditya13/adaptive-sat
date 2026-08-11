@@ -1,4 +1,15 @@
 export { ThemeProvider } from './theme-provider';
+export { AppShell } from './layout/AppShell';
+export { Sidebar } from './layout/Sidebar';
+export { Header } from './layout/Header';
+export { Breadcrumbs } from './layout/Breadcrumbs';
+export { UserMenu } from './layout/UserMenu';
+export { MobileTabBar } from './layout/MobileTabBar';
+export { MobileSidebarDrawer } from './layout/MobileSidebarDrawer';
+export { MobileProfileSheet } from './layout/MobileProfileSheet';
+export { Toast } from './layout/Toast';
+export { LoggedOutScreen } from './layout/LoggedOutScreen';
+export { PagePlaceholder } from './layout/PagePlaceholder';
 export { LoginForm } from './auth/LoginForm/LoginForm';
 export { SignupForm } from './auth/SignupForm/SignupForm';
 export { StatCard } from './dashboard/StatCard/StatCard';

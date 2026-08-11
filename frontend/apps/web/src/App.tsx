@@ -3,19 +3,26 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { ROUTES } from '@/constants/routes';
 import { useSessionCheck } from '@/hooks/use-session-check';
 import { useAuthStore } from '@/store/auth-store';
+import { AppShell } from '@/components/layout/AppShell';
+import { LoggedOutScreen } from '@/components/layout/LoggedOutScreen';
 import {
   LoginPage,
   SignupPage,
   ForgotPasswordPage,
   ResetPasswordPage,
   DashboardPage,
-  PracticePage,
   ResultsPage,
   CheckEmailPage,
   VerifyEmailPage,
   OAuthCallbackPage,
   SettingsPage,
   LinkAccountsPage,
+  PracticeSubjectPage,
+  PracticeHomePage,
+  PracticeDomainsPage,
+  PracticeSkillsPage,
+  PracticeConfirmPage,
+  QuestionsPage,
 } from '@/pages';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -77,38 +84,27 @@ export function App() {
       <Route path={ROUTES.CHECK_EMAIL} element={<CheckEmailPage />} />
       <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmailPage />} />
       <Route path={ROUTES.OAUTH_CALLBACK} element={<OAuthCallbackPage />} />
+      <Route path={ROUTES.LOGGED_OUT} element={<LoggedOutScreen />} />
+
+      {/* Every authenticated screen renders inside the app shell. */}
       <Route
-        path={ROUTES.DASHBOARD}
         element={
           <ProtectedRoute>
-            <DashboardPage />
+            <AppShell />
           </ProtectedRoute>
         }
-      />
-      <Route
-        path={ROUTES.PRACTICE}
-        element={
-          <ProtectedRoute>
-            <PracticePage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path={ROUTES.RESULTS}
-        element={
-          <ProtectedRoute>
-            <ResultsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path={ROUTES.SETTINGS}
-        element={
-          <ProtectedRoute>
-            <SettingsPage />
-          </ProtectedRoute>
-        }
-      />
+      >
+        <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
+        <Route path={ROUTES.PRACTICE} element={<PracticeSubjectPage />} />
+        <Route path={ROUTES.PRACTICE_SESSION} element={<QuestionsPage />} />
+        <Route path={ROUTES.PRACTICE_SUBJECT} element={<PracticeHomePage />} />
+        <Route path={ROUTES.PRACTICE_DOMAINS} element={<PracticeDomainsPage />} />
+        <Route path={ROUTES.PRACTICE_SKILLS} element={<PracticeSkillsPage />} />
+        <Route path={ROUTES.PRACTICE_CONFIRM} element={<PracticeConfirmPage />} />
+        <Route path={ROUTES.RESULTS} element={<ResultsPage />} />
+        <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
+      </Route>
+
       <Route
         path={ROUTES.LINK_ACCOUNTS}
         element={

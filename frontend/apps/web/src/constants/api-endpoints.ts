@@ -18,7 +18,12 @@ export const API = {
     ABANDON: '/api/v1/practice/abandon',
     ANSWER: '/api/v1/practice/answer',
     QUESTION: '/api/v1/practice/question',
+    NEXT: '/api/v1/practice/next',
     COMPLETE: '/api/v1/practice/complete',
+    /* Domain -> skill accuracy tree backing the practice drill-down.
+       Takes ?section=math|reading_writing; omitted falls back to the
+       student's last SELECT_SECTION choice. Responds in camelCase. */
+    SKILL_TREE: '/api/v1/practice/skill-tree',
     ATTEMPT_UPDATE: (id: number) => `/api/v1/practice/attempts/${id}`,
   },
   SETTINGS: {
