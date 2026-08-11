@@ -148,6 +148,35 @@ interface ApiErrorResponse {
   [key: string]: unknown;
 }
 
+/* Domain -> skill accuracy tree backing the practice drill-down
+   (GET /api/v1/practice/skill-tree?section=...). Responds in camelCase. */
+interface SkillTreeSkill {
+  name: string;
+  accuracy: number;
+  questionsAttempted: number;
+  questionsCorrect: number;
+  mastered: boolean;
+}
+
+interface SkillTreeDomain {
+  name: string;
+  /** 1-based position within the section; what POST /practice/start expects as topic_id. */
+  topicId: number;
+  topicCode: string;
+  accuracy: number;
+  questionsAttempted: number;
+  questionsCorrect: number;
+  mastered: boolean;
+  skills: SkillTreeSkill[];
+}
+
+interface SkillTreeResponse {
+  section: 'math' | 'reading_writing';
+  sectionDisplayName: string;
+  masteryRule: { accuracy: number; minQuestions: number };
+  domains: SkillTreeDomain[];
+}
+
 export type {
   User,
   ConnectedProvider,
@@ -165,4 +194,7 @@ export type {
   CompleteResponse,
   UpdateAttemptResponse,
   ApiErrorResponse,
+  SkillTreeSkill,
+  SkillTreeDomain,
+  SkillTreeResponse,
 };
