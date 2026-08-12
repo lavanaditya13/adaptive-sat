@@ -1,10 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { AxiosError, AxiosHeaders } from 'axios';
 import { MemoryRouter } from 'react-router-dom';
 import { LoginForm } from './LoginForm';
 import { login } from '@/services/auth-service';
 import { useAuthStore } from '@/store/auth-store';
+import { INVALID_CREDENTIALS_DESCRIPTION } from './LoginForm.constants';
+
+function unauthorizedError(detail: string) {
+  return new AxiosError(
+    'Request failed',
+    'ERR_BAD_REQUEST',
+    undefined,
+    undefined,
+    {
+      status: 401,
+      statusText: 'Unauthorized',
+      headers: {},
+      config: { headers: new AxiosHeaders() },
+      data: { detail },
+    } as never
+  );
+}
 
 vi.mock('@/services/auth-service', () => ({
   login: vi.fn(),
@@ -96,6 +114,29 @@ describe('LoginForm', () => {
 
     await waitFor(() => {
       expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
+    });
+  });
+
+  it('nudges toward signup on invalid credentials without revealing whether the account exists', async () => {
+    // The backend returns the same generic 401 whether the password is wrong
+    // or no account exists for that email -- this only asserts the frontend
+    // adds a signup nudge on top of that message, not that it distinguishes
+    // the two cases (it must not).
+    vi.mocked(login).mockRejectedValue(unauthorizedError('Incorrect email or password'));
+    const user = userEvent.setup();
+    renderLoginForm();
+
+    await user.type(screen.getByLabelText('Email'), 'nobody@example.com');
+    await user.type(screen.getByLabelText('Password'), 'password123');
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variant: 'destructive',
+          description: INVALID_CREDENTIALS_DESCRIPTION,
+        })
+      );
     });
   });
 });

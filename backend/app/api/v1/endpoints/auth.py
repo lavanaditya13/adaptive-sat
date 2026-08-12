@@ -1,4 +1,5 @@
 import logging
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
@@ -43,7 +44,7 @@ from app.schemas.auth import (
     UpdateProfileRequest,
     VerifyEmailRequest,
 )
-from app.services.user_service import update_user_profile
+from app.services.user_service import compose_full_name, update_user_profile
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -139,7 +140,16 @@ async def signup(
     try:
         new_user = await user_repository.create_user(
             db,
-            obj_in=user_in,
+            # create_user persists a single `full_name` column; compose it
+            # from the request's first/last name pair here rather than in
+            # the repository, matching how oauth_service builds the same
+            # SimpleNamespace shape for its own create_user call.
+            obj_in=SimpleNamespace(
+                email=user_in.email,
+                password=user_in.password,
+                full_name=compose_full_name(user_in.first_name, user_in.last_name),
+                role=user_in.role,
+            ),
         )
     except ValueError as exc:
         raise HTTPException(
