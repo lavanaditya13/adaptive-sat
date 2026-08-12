@@ -40,6 +40,9 @@ interface SessionHeaderProps {
   segments: SegmentState[];
   accent: SessionAccent;
   isPaused: boolean;
+  /** The current question's section. Gates the Desmos calculator: it's a
+   *  math-only tool, so it doesn't render for reading & writing sessions. */
+  section: 'math' | 'reading_writing' | undefined;
   onOpenNav: () => void;
   onTogglePause: () => void;
 }
@@ -52,6 +55,7 @@ export function SessionHeader({
   segments,
   accent,
   isPaused,
+  section,
   onOpenNav,
   onTogglePause,
 }: SessionHeaderProps) {
@@ -100,7 +104,7 @@ export function SessionHeader({
             )}
           </button>
 
-          <DesmosCalculator />
+          {section === 'math' && <DesmosCalculator />}
         </div>
       </div>
 

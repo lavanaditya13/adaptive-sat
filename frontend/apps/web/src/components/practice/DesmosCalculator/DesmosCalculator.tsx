@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Calculator, X } from 'lucide-react';
 import { cn } from '@workspace/ui/lib/utils';
-import { DialogContent, DialogHeader, DialogTitle } from '@workspace/ui/components/dialog';
 import { loadDesmosScript, type DesmosCalculatorInstance } from '@/utils/load-desmos-script';
 import {
   CALCULATOR_BUTTON_LABEL,
@@ -16,35 +15,47 @@ import {
   type DesmosTabId,
 } from './DesmosCalculator.constants';
 import {
-  BACKDROP_STYLES,
   CALCULATOR_CONTAINER_HIDDEN_STYLES,
   CALCULATOR_CONTAINER_STYLES,
   CALCULATOR_STAGE_STYLES,
+  CLICK_OUTSIDE_STYLES,
   CLOSE_BUTTON_STYLES,
-  DIALOG_CONTENT_STYLES,
   HEADER_ROW_STYLES,
-  OVERLAY_BASE_STYLES,
-  OVERLAY_CLOSED_STYLES,
-  OVERLAY_OPEN_STYLES,
+  PANEL_HIDDEN_STYLES,
+  PANEL_STYLES,
+  PANEL_TITLE_STYLES,
+  PANEL_VISIBLE_STYLES,
   RETRY_BUTTON_STYLES,
+  SHELL_BASE_STYLES,
+  SHELL_CLOSED_STYLES,
+  SHELL_OPEN_STYLES,
   STATUS_OVERLAY_STYLES,
   STATUS_TEXT_STYLES,
   TABS_ROW_STYLES,
   TAB_BUTTON_ACTIVE_STYLES,
   TAB_BUTTON_BASE_STYLES,
   TAB_BUTTON_INACTIVE_STYLES,
-  TOGGLE_BUTTON_STYLES,
+  TRIGGER_BUTTON_HIDDEN_STYLES,
+  TRIGGER_BUTTON_STYLES,
+  TRIGGER_BUTTON_VISIBLE_STYLES,
 } from './DesmosCalculator.styles';
 
 /**
- * Self-contained calculator launcher: an icon button plus its own dialog,
- * mounted once at the session level (SessionHeader) rather than per
- * question. QuestionCard swaps out on every question navigation, so a
- * calculator instance living there would be destroyed and recreated,
- * wiping out anything the student graphed -- this component (and the
- * Desmos instances it owns) instead lives for the lifetime of the whole
+ * Self-contained calculator launcher: a floating icon that morphs in place
+ * into the full calculator, mounted once at the session level (SessionHeader)
+ * rather than per question. QuestionCard swaps out on every question
+ * navigation, so a calculator instance living there would be destroyed and
+ * recreated, wiping out anything the student graphed -- this component (and
+ * the Desmos instances it owns) instead lives for the lifetime of the whole
  * practice session, unaffected by which question is on screen, matching how
  * the real digital-SAT Bluebook calculator behaves.
+ *
+ * There's no separate dialog/backdrop: a single fixed shell element animates
+ * its own width/height/border-radius between a small circular trigger and
+ * the full panel size (see DesmosCalculator.styles.ts), so it visually reads
+ * as the button itself growing into the calculator -- the same "expand in
+ * place" feel as iOS's AssistiveTouch bubble -- instead of a modal popping
+ * up over the page.
  */
 export function DesmosCalculator() {
   const [isOpen, setIsOpen] = useState(false);
@@ -83,7 +94,7 @@ export function DesmosCalculator() {
       }
     } catch {
       // Allow the student to retry (e.g. after reconnecting) instead of
-      // permanently wedging the dialog in a broken state.
+      // permanently wedging the panel in a broken state.
       hasInitializedRef.current = false;
       setLoadError(LOAD_ERROR_MESSAGE);
     } finally {
@@ -93,7 +104,7 @@ export function DesmosCalculator() {
 
   // Only destroy Desmos's internal resources when the owning component
   // actually unmounts (the student leaves the practice session) -- never on
-  // dialog close, so state graphed by the student survives close/reopen.
+  // close, so state graphed by the student survives close/reopen.
   useEffect(() => {
     return () => {
       graphingCalculatorRef.current?.destroy();
@@ -104,7 +115,7 @@ export function DesmosCalculator() {
   }, []);
 
   // Instantiate lazily -- only the first time the student actually opens the
-  // dialog -- and only once per session; reopening after a close is a no-op
+  // panel -- and only once per session; reopening after a close is a no-op
   // guarded by hasInitializedRef inside initializeCalculators. Triggered
   // directly from the click handler rather than an effect keyed on `isOpen`
   // so the async load never has to synchronously set state from an effect.
@@ -114,44 +125,68 @@ export function DesmosCalculator() {
   };
   const handleClose = () => setIsOpen(false);
 
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        handleClose();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
   return (
     <>
-      <button
-        type="button"
-        onClick={handleOpen}
-        aria-label={CALCULATOR_BUTTON_LABEL}
-        className={TOGGLE_BUTTON_STYLES}
-      >
-        <Calculator className="size-[13px]" aria-hidden="true" />
-      </button>
+      {isOpen && (
+        <div className={CLICK_OUTSIDE_STYLES} onClick={handleClose} aria-hidden="true" />
+      )}
 
-      {/* Deliberately not the shared `Dialog` component: that one
-          conditionally unmounts its children when closed, which would tear
-          down the Desmos containers below and lose the student's graph.
-          Visibility is toggled with a CSS class instead so the DOM (and the
-          Desmos instances bound to it) stays mounted for the whole session. */}
       <div
-        className={cn(OVERLAY_BASE_STYLES, isOpen ? OVERLAY_OPEN_STYLES : OVERLAY_CLOSED_STYLES)}
-        role="dialog"
-        aria-modal="true"
-        aria-label={CALCULATOR_DIALOG_TITLE}
+        className={cn(SHELL_BASE_STYLES, isOpen ? SHELL_OPEN_STYLES : SHELL_CLOSED_STYLES)}
+        role={isOpen ? 'dialog' : undefined}
+        aria-modal={isOpen ? true : undefined}
+        aria-label={isOpen ? CALCULATOR_DIALOG_TITLE : undefined}
       >
-        <div className={BACKDROP_STYLES} onClick={handleClose} />
+        <button
+          type="button"
+          onClick={handleOpen}
+          aria-label={CALCULATOR_BUTTON_LABEL}
+          tabIndex={isOpen ? -1 : 0}
+          className={cn(
+            TRIGGER_BUTTON_STYLES,
+            isOpen ? TRIGGER_BUTTON_HIDDEN_STYLES : TRIGGER_BUTTON_VISIBLE_STYLES
+          )}
+        >
+          <Calculator className="size-5" aria-hidden="true" />
+        </button>
 
-        <DialogContent className={DIALOG_CONTENT_STYLES}>
-          <DialogHeader>
-            <div className={HEADER_ROW_STYLES}>
-              <DialogTitle>{CALCULATOR_DIALOG_TITLE}</DialogTitle>
-              <button
-                type="button"
-                onClick={handleClose}
-                aria-label={CLOSE_BUTTON_LABEL}
-                className={CLOSE_BUTTON_STYLES}
-              >
-                <X className="size-4" aria-hidden="true" />
-              </button>
-            </div>
-          </DialogHeader>
+        {/* Fixed-size regardless of the shell's own animated size (see
+            PANEL_STYLES) -- only clipping and opacity change, so the Desmos
+            containers below never observe a resize from this open/close
+            animation. `inert` while closed keeps the whole subtree
+            (including Desmos's own internal focusable DOM, which we don't
+            control) out of focus/pointer reach, on top of the visual
+            opacity + pointer-events-none. */}
+        <div
+          className={cn(PANEL_STYLES, isOpen ? PANEL_VISIBLE_STYLES : PANEL_HIDDEN_STYLES)}
+          inert={!isOpen}
+        >
+          <div className={HEADER_ROW_STYLES}>
+            <h2 className={PANEL_TITLE_STYLES}>{CALCULATOR_DIALOG_TITLE}</h2>
+            <button
+              type="button"
+              onClick={handleClose}
+              aria-label={CLOSE_BUTTON_LABEL}
+              className={CLOSE_BUTTON_STYLES}
+            >
+              <X className="size-4" aria-hidden="true" />
+            </button>
+          </div>
 
           <div className={TABS_ROW_STYLES}>
             {DESMOS_TABS.map((tab) => (
@@ -205,7 +240,7 @@ export function DesmosCalculator() {
               </div>
             )}
           </div>
-        </DialogContent>
+        </div>
       </div>
     </>
   );

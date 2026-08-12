@@ -27,8 +27,12 @@ const fakeDesmos = {
   ScientificCalculator: scientificCalculatorMock,
 };
 
-function getDialog() {
-  return screen.getByRole('dialog', { name: CALCULATOR_DIALOG_TITLE });
+// `role="dialog"` is only present on the shell once it's open -- the panel
+// stays clipped/inert behind the collapsed trigger otherwise, matching the
+// "small icon that grows into the calculator" behavior (no separate
+// modal/backdrop element to query in the closed state).
+function queryDialog() {
+  return screen.queryByRole('dialog', { name: CALCULATOR_DIALOG_TITLE });
 }
 
 async function openCalculator(user: ReturnType<typeof userEvent.setup>) {
@@ -46,27 +50,26 @@ describe('DesmosCalculator', () => {
     vi.mocked(loadDesmosScript).mockResolvedValue(fakeDesmos as never);
   });
 
-  it('renders the toggle button with an accessible label', () => {
+  it('renders the collapsed trigger button with an accessible label, no dialog yet', () => {
     render(<DesmosCalculator />);
 
     expect(screen.getByRole('button', { name: CALCULATOR_BUTTON_LABEL })).toBeInTheDocument();
+    expect(queryDialog()).not.toBeInTheDocument();
+    expect(loadDesmosScript).not.toHaveBeenCalled();
   });
 
-  it('opens the dialog and lazily instantiates both calculators exactly once', async () => {
+  it('expands into the calculator and lazily instantiates both calculators exactly once', async () => {
     const user = userEvent.setup();
     render(<DesmosCalculator />);
 
-    expect(getDialog().className).toContain('hidden');
-    expect(loadDesmosScript).not.toHaveBeenCalled();
-
     await openCalculator(user);
 
-    expect(getDialog().className).toContain('flex');
+    expect(queryDialog()).toBeInTheDocument();
     expect(loadDesmosScript).toHaveBeenCalledTimes(1);
     expect(graphingCalculatorMock).toHaveBeenCalledTimes(1);
     expect(scientificCalculatorMock).toHaveBeenCalledTimes(1);
 
-    // Closing and reopening must not create a second pair of instances.
+    // Collapsing and reopening must not create a second pair of instances.
     await user.click(screen.getByRole('button', { name: CLOSE_BUTTON_LABEL }));
     await user.click(screen.getByRole('button', { name: CALCULATOR_BUTTON_LABEL }));
 
@@ -87,16 +90,27 @@ describe('DesmosCalculator', () => {
     expect(scientificCalculatorMock).toHaveBeenCalledTimes(1);
   });
 
-  it('does not destroy the calculators when the dialog is closed', async () => {
+  it('does not destroy the calculators when collapsed back down', async () => {
     const user = userEvent.setup();
     render(<DesmosCalculator />);
     await openCalculator(user);
 
     await user.click(screen.getByRole('button', { name: CLOSE_BUTTON_LABEL }));
 
-    expect(getDialog().className).toContain('hidden');
+    expect(queryDialog()).not.toBeInTheDocument();
     expect(graphingDestroy).not.toHaveBeenCalled();
     expect(scientificDestroy).not.toHaveBeenCalled();
+  });
+
+  it('closes when Escape is pressed, without destroying the calculators', async () => {
+    const user = userEvent.setup();
+    render(<DesmosCalculator />);
+    await openCalculator(user);
+
+    await user.keyboard('{Escape}');
+
+    expect(queryDialog()).not.toBeInTheDocument();
+    expect(graphingDestroy).not.toHaveBeenCalled();
   });
 
   it('destroys both calculators when the owning component unmounts', async () => {
