@@ -56,9 +56,26 @@ class DashboardProgressResponse(BaseModel):
 
 
 class DashboardWeakTopicResponse(BaseModel):
+    # The real Topic primary key. Note this is deliberately NOT the id the
+    # practice endpoints take — see practice_topic_id below.
     topic_id: int
     display_name: str
+    # Accuracy over this topic, 0-100. Named "mastery" for the dashboard's
+    # sake; it is the same number the skill tree reports as `accuracy`.
     mastery_score: float
+    questions_attempted: int
+    questions_correct: int
+
+    # Deep-link fields. All four are None only when the topic has no
+    # questions left in any section (so it can't be practised); the client
+    # renders such a row without a start action rather than dropping it,
+    # since the weakness itself is still worth showing.
+    section: Optional[str] = None
+    section_id: Optional[int] = None
+    section_display_name: Optional[str] = None
+    # The section-scoped 1-based position POST /practice/start expects as
+    # `topic_id` — see practice_service._load_section_topic_rows.
+    practice_topic_id: Optional[int] = None
 
 
 class DashboardSectionResponse(BaseModel):

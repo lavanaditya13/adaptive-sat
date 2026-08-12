@@ -135,17 +135,53 @@ async def _upsert_selected_section(
     return context
 
 
-async def _load_section_topics(
+async def _load_section_topic_rows(
     db: AsyncSession,
     section_code: str,
-) -> list[TopicActionItem]:
+) -> list[Topic]:
+    """The section's topics in the canonical order that defines the public
+    `topic_id`: a 1-based position in this list, not a Topic primary key.
+
+    Every producer and consumer of that identifier must read the ordering
+    from here — `_load_section_topics`, `_resolve_topic_for_section`,
+    `get_topic_practice_positions` and `build_skill_tree` all hand out or
+    resolve positions, and they silently point at the wrong topic if any
+    one of them orders differently.
+    """
     result = await db.execute(
         select(Topic)
         .join(Question)
         .where(Question.section == section_code)
         .order_by(Topic.name.asc())
     )
-    topics = list(result.scalars().unique().all())
+    return list(result.scalars().unique().all())
+
+
+async def get_topic_practice_positions(
+    db: AsyncSession,
+) -> dict[int, tuple[str, int]]:
+    """Map a real Topic.id to (section_code, position) so callers holding a
+    database id can build a `topic_id` the practice endpoints accept.
+
+    Topics with no questions are absent — they have no section to be
+    positioned within and cannot be practised.
+    """
+    positions: dict[int, tuple[str, int]] = {}
+
+    for section_code in SECTION_CODES.values():
+        topics = await _load_section_topic_rows(db=db, section_code=section_code)
+
+        for position, topic in enumerate(topics, start=1):
+            positions[topic.id] = (section_code, position)
+
+    return positions
+
+
+async def _load_section_topics(
+    db: AsyncSession,
+    section_code: str,
+) -> list[TopicActionItem]:
+    topics = await _load_section_topic_rows(db=db, section_code=section_code)
 
     topic_items: list[TopicActionItem] = []
 
@@ -166,13 +202,7 @@ async def _resolve_topic_for_section(
     section_code: str,
     topic_id: int,
 ) -> Topic:
-    result = await db.execute(
-        select(Topic)
-        .join(Question)
-        .where(Question.section == section_code)
-        .order_by(Topic.name.asc())
-    )
-    topics = list(result.scalars().unique().all())
+    topics = await _load_section_topic_rows(db=db, section_code=section_code)
 
     if topic_id < 1 or topic_id > len(topics):
         raise HTTPException(status_code=404, detail="Topic not found")

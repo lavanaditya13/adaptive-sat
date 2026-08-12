@@ -13,7 +13,7 @@ export { PagePlaceholder } from './layout/PagePlaceholder';
 export { LoginForm } from './auth/LoginForm/LoginForm';
 export { SignupForm } from './auth/SignupForm/SignupForm';
 export { StatCard } from './dashboard/StatCard/StatCard';
-export { WeakTopicsList } from './dashboard/WeakTopicsList/WeakTopicsList';
+export { WeakTopicsCard } from './dashboard/WeakTopicsCard/WeakTopicsCard';
 export { SectionCard } from './dashboard/SectionCard/SectionCard';
 export { QuestionCard } from './practice/QuestionCard/QuestionCard';
 export { ProgressBar } from './practice/ProgressBar/ProgressBar';
