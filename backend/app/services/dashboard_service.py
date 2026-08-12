@@ -19,6 +19,11 @@ from app.schemas.practice import (
     StudentDashboardResponse,
     UpdateTargetScoreRequest,
 )
+from app.services.practice_service import (
+    SECTION_CODES,
+    SECTION_DISPLAY_NAMES,
+    get_topic_practice_positions,
+)
 from app.services.scoring_service import get_estimated_score
 from app.services.skill_scoring_service import (
     compute_accuracy_trend,
@@ -37,6 +42,51 @@ async def _count_section_topics(db: AsyncSession, section_code: str) -> int:
         .where(Question.section == section_code)
     )
     return result.scalar_one()
+
+
+# practice_service maps id -> code; the deep link needs the reverse, because
+# the client has to POST the numeric section id to select a section before it
+# can start topic practice.
+SECTION_IDS = {code: section_id for section_id, code in SECTION_CODES.items()}
+
+
+async def _build_weak_topics(
+    db: AsyncSession,
+    weakest_topics: list[dict],
+) -> list[DashboardWeakTopicResponse]:
+    """Turn the raw weakest-topic stats into rows the dashboard can deep-link
+    from.
+
+    Each row carries both identifiers on purpose: `topic_id` is the real
+    primary key (a stable React key, and correct if anything ever looks the
+    topic up directly), while `practice_topic_id` plus `section_id` are what
+    a client needs to actually start the session — select the section, then
+    start topic mode with the section-scoped position.
+    """
+    positions = await get_topic_practice_positions(db=db)
+
+    weak_topics: list[DashboardWeakTopicResponse] = []
+
+    for topic in weakest_topics:
+        section_code, practice_topic_id = positions.get(topic["topic_id"], (None, None))
+
+        weak_topics.append(
+            DashboardWeakTopicResponse(
+                topic_id=topic["topic_id"],
+                display_name=topic["topic_name"],
+                mastery_score=round(topic["accuracy"] * 100, 1),
+                questions_attempted=topic["attempted"],
+                questions_correct=topic["correct"],
+                section=section_code,
+                section_id=SECTION_IDS.get(section_code) if section_code else None,
+                section_display_name=(
+                    SECTION_DISPLAY_NAMES.get(section_code) if section_code else None
+                ),
+                practice_topic_id=practice_topic_id,
+            )
+        )
+
+    return weak_topics
 
 
 async def _load_student(db: AsyncSession, student_id: int) -> User:
@@ -84,15 +134,10 @@ async def get_student_dashboard(
     sections_result = await db.execute(select(Section).order_by(Section.id.asc()))
     sections = list(sections_result.scalars().all())
 
-    weak_topics: list[DashboardWeakTopicResponse] = []
-    for index, topic in enumerate(progress.get("weakest_topics", []), start=1):
-        weak_topics.append(
-            DashboardWeakTopicResponse(
-                topic_id=index,
-                display_name=topic["topic_name"],
-                mastery_score=round(topic["accuracy"] * 100, 1),
-            )
-        )
+    weak_topics = await _build_weak_topics(
+        db=db,
+        weakest_topics=progress.get("weakest_topics", []),
+    )
 
     dashboard_sections: list[DashboardSectionResponse] = []
     for section in sections:

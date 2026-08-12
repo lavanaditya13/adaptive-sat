@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
 import { ChartNoAxesColumn, Check, Flame, TrendingUp } from 'lucide-react';
 import { Button } from '@workspace/ui/components/button';
 import { Skeleton } from '@workspace/ui/components/skeleton';
@@ -7,13 +9,20 @@ import { EmailVerificationBanner } from '@/components/dashboard/EmailVerificatio
 import { EstimatedScoreCard } from '@/components/dashboard/EstimatedScoreCard/EstimatedScoreCard';
 import { SectionCard } from '@/components/dashboard/SectionCard/SectionCard';
 import { StatCard } from '@/components/dashboard/StatCard/StatCard';
+import { WeakTopicsCard } from '@/components/dashboard/WeakTopicsCard/WeakTopicsCard';
+import {
+  SESSION_CONFLICT_MESSAGE,
+  START_ERROR_MESSAGE,
+} from '@/components/dashboard/WeakTopicsCard/WeakTopicsCard.constants';
 import { queryKeys } from '@/constants/query-keys';
 import { practicePath } from '@/constants/routes';
 import { getDashboard } from '@/services/dashboard-service';
+import { selectSection, startPractice } from '@/services/practice-service';
+import { useAppShellStore } from '@/store/app-shell-store';
 import { useAuthStore } from '@/store/auth-store';
 import { getApiErrorDetail } from '@/utils/api-errors';
 import { getFirstName } from '@/utils/user-display';
-import type { DashboardResponse, User } from '@/types/api';
+import type { DashboardResponse, User, WeakTopic } from '@/types/api';
 import {
   ACCURACY_CAPTION_NO_TREND,
   ACCURACY_CAPTION_SUFFIX,
@@ -56,7 +65,9 @@ import {
   SKELETON_SECTION_CARD_STYLES,
   SKELETON_SECTION_LABEL_STYLES,
   SKELETON_STAT_STYLES,
+  SKELETON_WEAK_TOPICS_STYLES,
   STATS_GRID_STYLES,
+  WEAK_TOPICS_BLOCK_STYLES,
 } from './DashboardPage.styles';
 
 type DashboardSection = DashboardResponse['sections'][number];
@@ -74,6 +85,8 @@ function resolveFirstName(user: User | null, dashboardFullName: string): string 
 export function DashboardPage() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
+  const showToast = useAppShellStore((state) => state.showToast);
+  const [startingTopicId, setStartingTopicId] = useState<number | null>(null);
 
   const {
     data: dashboard,
@@ -89,6 +102,37 @@ export function DashboardPage() {
     navigate(practicePath.subject(section.name));
   };
 
+  /* The one-click deep link the weak-topic card offers. It has to select the
+     section first: topic mode resolves `topic_id` as a position *within the
+     student's currently selected section*, so skipping this would happily
+     start the same position in whichever section was selected last — a
+     different topic entirely. Elsewhere PracticeHomePage does this
+     registration, but the dashboard bypasses that screen. */
+  const handlePracticeWeakTopic = async (topic: WeakTopic) => {
+    if (topic.section_id === null || topic.practice_topic_id === null) {
+      return;
+    }
+
+    setStartingTopicId(topic.topic_id);
+
+    try {
+      await selectSection(topic.section_id);
+      await startPractice({ mode: 'topic', topic_id: topic.practice_topic_id });
+      navigate(practicePath.session());
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 409) {
+        // An unfinished session blocks a new one; the practice screens own
+        // the resume/discard choice, so just say so rather than duplicating it.
+        showToast(SESSION_CONFLICT_MESSAGE);
+        return;
+      }
+
+      showToast(getApiErrorDetail(err) || START_ERROR_MESSAGE);
+    } finally {
+      setStartingTopicId(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className={CONTAINER_STYLES}>
@@ -100,6 +144,7 @@ export function DashboardPage() {
           <Skeleton className={SKELETON_STAT_STYLES} />
         </div>
         <Skeleton className={SKELETON_SCORE_STYLES} />
+        <Skeleton className={SKELETON_WEAK_TOPICS_STYLES} />
         <Skeleton className={SKELETON_SECTION_LABEL_STYLES} />
         <div className={SECTIONS_GRID_STYLES}>
           <Skeleton className={SKELETON_SECTION_CARD_STYLES} />
@@ -188,6 +233,16 @@ export function DashboardPage() {
           </div>
         )}
       </div>
+
+      {hasAttempts && (
+        <div className={WEAK_TOPICS_BLOCK_STYLES}>
+          <WeakTopicsCard
+            topics={dashboard.weak_topics}
+            onPractice={handlePracticeWeakTopic}
+            startingTopicId={startingTopicId}
+          />
+        </div>
+      )}
 
       <p className={SECTION_LABEL_STYLES}>{SECTIONS_TITLE}</p>
       {sections.length > 0 ? (

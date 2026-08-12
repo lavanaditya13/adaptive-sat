@@ -15,6 +15,7 @@ from app.models.topic import Topic
 from app.models.user import User
 from app.schemas.practice import UpdateTargetScoreRequest
 from app.services.dashboard_service import get_student_dashboard, update_target_score
+from app.services.practice_service import _resolve_topic_for_section
 
 CHOICES = {"A": "opt-a", "B": "opt-b", "C": "opt-c", "D": "opt-d"}
 
@@ -98,6 +99,71 @@ async def test_get_student_dashboard_counts_completed_sessions_and_accuracy(stud
     assert dashboard.progress.sessions_completed == 1
     assert dashboard.progress.questions_answered == 1
     assert dashboard.progress.accuracy_percentage == 100.0
+
+
+@pytest.mark.asyncio
+async def test_weak_topics_carry_a_resolvable_practice_deep_link(student, cleanup_after):
+    """The whole point of the weak-topic card: `practice_topic_id` must round
+    trip back to the same topic through the resolver POST /practice/start
+    uses, or the deep link silently starts practice on a different topic."""
+    async with SessionLocal() as db:
+        await _get_or_create_section(db, "math", "Math")
+        topic = Topic(
+            code=f"WEAK_TOPIC_{uuid.uuid4().hex[:8]}",
+            name=f"Weak Topic {uuid.uuid4().hex[:8]}",
+            section="math",
+        )
+        db.add(topic)
+        await db.flush()
+        cleanup_after.append((Topic, topic.id))
+
+        question = Question(
+            section="math", prompt=f"Weak Q {uuid.uuid4().hex[:8]}", choices=CHOICES,
+            correct_answer="A", difficulty="easy", topic_id=topic.id,
+        )
+        db.add(question)
+        await db.flush()
+
+        session = PracticeSession(
+            student_id=student.id, section_id=1, mode="section", status="completed", question_count=1
+        )
+        db.add(session)
+        await db.flush()
+
+        # Wrong answer, so this topic sorts to the bottom of the weakest list.
+        db.add(
+            Attempt(
+                practice_session_id=session.id,
+                student_id=student.id,
+                question_id=question.id,
+                topic_id=topic.id,
+                selected_answer="B",
+                correct_answer="A",
+                is_correct=False,
+                time_spent_seconds=60,
+            )
+        )
+        await db.commit()
+
+    async with SessionLocal() as db:
+        dashboard = await get_student_dashboard(db=db, student_id=student.id)
+
+    weak = next(t for t in dashboard.weak_topics if t.topic_id == topic.id)
+
+    assert weak.mastery_score == 0.0
+    assert weak.questions_attempted == 1
+    assert weak.questions_correct == 0
+    assert weak.section == "math"
+    assert weak.section_id == 1
+    assert weak.section_display_name == "Math"
+    assert weak.practice_topic_id is not None
+
+    async with SessionLocal() as db:
+        resolved = await _resolve_topic_for_section(
+            db=db, section_code="math", topic_id=weak.practice_topic_id
+        )
+
+    assert resolved.id == topic.id
 
 
 @pytest.mark.asyncio
