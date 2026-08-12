@@ -114,6 +114,7 @@ export function QuestionsPage() {
         segments={session.segments}
         accent={session.accent}
         isPaused={session.isPaused}
+        section={session.question.section}
         onOpenNav={session.openNav}
         onTogglePause={session.togglePause}
       />

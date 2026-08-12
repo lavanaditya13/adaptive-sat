@@ -1,5 +1,6 @@
 import { LayoutGrid, Pause, Play } from 'lucide-react';
 import { cn } from '@workspace/ui/lib/utils';
+import { DesmosCalculator } from '@/components/practice/DesmosCalculator/DesmosCalculator';
 import { ProgressBar } from '@/components/practice/ProgressBar/ProgressBar';
 import type { SegmentState } from '@/components/practice/ProgressBar/ProgressBar.constants';
 import { formatClock, type SessionAccent } from '@/components/practice/session-accent';
@@ -39,6 +40,9 @@ interface SessionHeaderProps {
   segments: SegmentState[];
   accent: SessionAccent;
   isPaused: boolean;
+  /** The current question's section. Gates the Desmos calculator: it's a
+   *  math-only tool, so it doesn't render for reading & writing sessions. */
+  section: 'math' | 'reading_writing' | undefined;
   onOpenNav: () => void;
   onTogglePause: () => void;
 }
@@ -51,6 +55,7 @@ export function SessionHeader({
   segments,
   accent,
   isPaused,
+  section,
   onOpenNav,
   onTogglePause,
 }: SessionHeaderProps) {
@@ -98,6 +103,8 @@ export function SessionHeader({
               <Pause className="size-[13px]" aria-hidden="true" />
             )}
           </button>
+
+          {section === 'math' && <DesmosCalculator />}
         </div>
       </div>
 
