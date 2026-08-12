@@ -43,6 +43,8 @@ export const SAVE_BUTTON_DISABLED_STYLES =
   'cursor-not-allowed rounded-[10px] border-none bg-math-button/25 px-5 py-2.5 text-[13px] font-bold text-white/35';
 
 export const SKELETON_ROW_STYLES = 'h-16 w-full rounded-xl';
+export const ERROR_MESSAGE_STYLES = 'text-sm text-danger';
+
 export const ADD_PROVIDER_BUTTON_STYLES =
   'mt-4 rounded-[10px] border-white/10 bg-transparent text-ink-secondary hover:bg-white/[0.04] hover:text-ink';
 

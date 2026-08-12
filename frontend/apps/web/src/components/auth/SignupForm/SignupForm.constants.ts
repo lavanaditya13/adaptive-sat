@@ -12,3 +12,4 @@ export const ROLE_STUDENT = 'Student';
 export const ROLE_PARENT = 'Parent';
 export const ROLE_TUTOR = 'Tutor';
 export const ROLE_NOTE = 'Note: Only Student accounts are functional today.';
+export const SIGNUP_ERROR_TITLE = 'Signup failed';

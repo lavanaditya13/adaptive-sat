@@ -1,4 +1,10 @@
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field, field_validator
+
+# Keep in sync with the client-side rule in
+# frontend/apps/web/src/utils/validation-schemas.ts.
+PASSWORD_MIN_LENGTH = 8
 
 
 class AuthUserResponse(BaseModel):
@@ -18,9 +24,11 @@ class LoginResponse(BaseModel):
 
 class SignupRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=PASSWORD_MIN_LENGTH)
     full_name: str
-    role: str = "student"  # student, parent, tutor
+    # Self-service signup may only create students. Any other role has to be
+    # granted server-side, never chosen by the client.
+    role: Literal["student"] = "student"
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -45,7 +53,8 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    password: str
+    password: str = Field(min_length=PASSWORD_MIN_LENGTH)
+
 
 class UpdateProfileRequest(BaseModel):
     """Body of PATCH /auth/me.
@@ -66,11 +75,3 @@ class UpdateProfileRequest(BaseModel):
     @classmethod
     def _strip_whitespace(cls, value: object) -> object:
         return value.strip() if isinstance(value, str) else value
-
-
-class RefreshRequest(BaseModel):
-    refresh_token: str
-
-class RefreshResponse(BaseModel):
-    access_token: str
-    expires_in: int

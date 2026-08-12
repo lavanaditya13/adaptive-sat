@@ -44,6 +44,7 @@ import {
   SAVE_BUTTON_ENABLED_STYLES,
   SAVE_BUTTON_DISABLED_STYLES,
   SKELETON_ROW_STYLES,
+  ERROR_MESSAGE_STYLES,
   ADD_PROVIDER_BUTTON_STYLES,
   NOTIF_COMING_SOON_STYLES,
   NOTIF_LIST_STYLES,
@@ -262,7 +263,7 @@ export function SettingsPage() {
           </div>
 
           {isLoading && <Skeleton className={SKELETON_ROW_STYLES} />}
-          {error && <p className="text-sm text-danger">{LOAD_ERROR_MESSAGE}</p>}
+          {error && <p className={ERROR_MESSAGE_STYLES}>{LOAD_ERROR_MESSAGE}</p>}
           {data && (
             <>
               <ConnectedProvidersList providers={data.providers} hasPassword={data.has_password} onUnlinked={handleUnlinked} />

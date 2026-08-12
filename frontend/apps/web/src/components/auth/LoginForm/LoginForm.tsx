@@ -15,12 +15,16 @@ import {
   CARD_STYLES,
   TITLE_STYLES,
   SUBTITLE_STYLES,
+  OAUTH_SECTION_STYLES,
   formStyles,
+  FIELD_STYLES,
   inputStyles,
+  ERROR_STYLES,
   LABEL_ROW_STYLES,
   forgotPasswordStyles,
   buttonStyles,
   linkStyles,
+  FOOTER_STYLES,
 } from './LoginForm.styles';
 import {
   TITLE,
@@ -33,6 +37,7 @@ import {
   SUBMITTING_LABEL,
   NO_ACCOUNT,
   SIGNUP_LINK,
+  LOGIN_ERROR_TITLE,
 } from './LoginForm.constants';
 
 export function LoginForm() {
@@ -54,7 +59,7 @@ export function LoginForm() {
       navigate(ROUTES.DASHBOARD);
     } catch (error) {
       toast({
-        title: 'Login failed',
+        title: LOGIN_ERROR_TITLE,
         description: getApiErrorDetail(error),
         variant: 'destructive',
       });
@@ -66,18 +71,18 @@ export function LoginForm() {
       <h1 className={TITLE_STYLES}>{TITLE}</h1>
       <p className={SUBTITLE_STYLES}>{SUBTITLE}</p>
 
-      <div className="mt-6">
+      <div className={OAUTH_SECTION_STYLES}>
         <OAuthButtons intent="login" />
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className={formStyles}>
-        <div className="space-y-2">
+        <div className={FIELD_STYLES}>
           <Label htmlFor="email">{EMAIL_LABEL}</Label>
           <Input id="email" type="email" {...register('email')} className={inputStyles} />
-          {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+          {errors.email && <p className={ERROR_STYLES}>{errors.email.message}</p>}
         </div>
 
-        <div className="space-y-2">
+        <div className={FIELD_STYLES}>
           <div className={LABEL_ROW_STYLES}>
             <Label htmlFor="password">{PASSWORD_LABEL}</Label>
             <button
@@ -90,7 +95,7 @@ export function LoginForm() {
             </button>
           </div>
           <Input id="password" type="password" {...register('password')} className={inputStyles} />
-          {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
+          {errors.password && <p className={ERROR_STYLES}>{errors.password.message}</p>}
         </div>
 
         <Button type="submit" disabled={isSubmitting} className={buttonStyles}>
@@ -98,7 +103,7 @@ export function LoginForm() {
         </Button>
       </form>
 
-      <p className="mt-4 text-center text-sm text-muted-foreground">
+      <p className={FOOTER_STYLES}>
         {NO_ACCOUNT}{' '}
         <button type="button" onClick={() => navigate(ROUTES.SIGNUP)} className={linkStyles}>
           {SIGNUP_LINK}

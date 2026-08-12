@@ -18,6 +18,8 @@ import {
   CONTAINER_STYLES,
   EMPTY_CONTAINER_STYLES,
   EMPTY_CARD_STYLES,
+  EMPTY_TITLE_STYLES,
+  EMPTY_DESCRIPTION_STYLES,
   CTA_CONTAINER_STYLES,
   CTA_BUTTON_STYLES,
 } from './ResultsPage.styles';
@@ -49,8 +51,8 @@ export function ResultsPage() {
     return (
       <div className={EMPTY_CONTAINER_STYLES}>
         <Card className={EMPTY_CARD_STYLES}>
-          <h2 className="text-lg font-bold text-ink">{EMPTY_TITLE}</h2>
-          <p className="text-sm text-ink-muted">{EMPTY_DESCRIPTION}</p>
+          <h2 className={EMPTY_TITLE_STYLES}>{EMPTY_TITLE}</h2>
+          <p className={EMPTY_DESCRIPTION_STYLES}>{EMPTY_DESCRIPTION}</p>
           <Button className={CTA_BUTTON_STYLES} onClick={handleBackToDashboard}>
             {BACK_TO_DASHBOARD_BUTTON}
           </Button>

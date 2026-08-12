@@ -16,7 +16,16 @@
       "Bash(claude mcp *)",
       "mcp__GitKraken__issues_assigned_to_me",
       "mcp__claude_ai_Atlassian_Rovo__getAccessibleAtlassianResources",
-      "mcp__claude_ai_Atlassian_Rovo__getVisibleJiraProjects"
+      "mcp__claude_ai_Atlassian_Rovo__getVisibleJiraProjects",
+      "mcp__claude_ai_Notion__notion-fetch",
+      "Bash(python3 -c ' *)",
+      "Bash(gh pr *)",
+      "Bash(gh issue *)",
+      "Bash(gh run *)",
+      "Bash(gh api *)",
+      "Bash(python3 -c \"import yaml,sys; d=yaml.safe_load\\(open\\('.github/workflows/claude-review.yml'\\)\\); print\\('OK, top-level keys:', list\\(d.keys\\(\\)\\)\\); print\\('job perms:', d['jobs']['review']\\)\")",
+      "Bash(git status *)",
+      "Bash(git fetch *)"
     ]
   }
 }

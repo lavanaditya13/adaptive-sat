@@ -8,15 +8,36 @@ from urllib.parse import (
     urlunsplit,
 )
 
-from pydantic import AliasChoices, Field, ValidationInfo, field_validator
+from pydantic import (
+    AliasChoices,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ENV_FILE = BACKEND_ROOT / ".env"
 
+# Minimum entropy we require of a production signing key.
+SECRET_KEY_MIN_LENGTH = 32
+
+# Values shipped in the repo / .env.example. Safe for local dev and tests,
+# never acceptable in production.
+PLACEHOLDER_SECRET_KEYS = frozenset(
+    {
+        "change-this-secret-key",
+        "changeme",
+        "secret",
+        "your-secret-key",
+        "your-secret-key-here",
+    }
+)
+
 
 class Settings(BaseSettings):
+
     model_config = SettingsConfigDict(
         env_file=str(BACKEND_ENV_FILE),
         env_file_encoding="utf-8",
@@ -167,6 +188,32 @@ class Settings(BaseSettings):
             for origin in raw_value.split(",")
             if origin.strip()
         ]
+
+    @model_validator(mode="after")
+    def enforce_production_secret_key(self) -> "Settings":
+        """Fail fast in production on a placeholder or low-entropy SECRET_KEY.
+
+        The default is deliberately kept for local dev and the test suite, so
+        the only guard is this startup check.
+        """
+        if self.ENVIRONMENT != "production":
+            return self
+
+        secret_key = (self.SECRET_KEY or "").strip()
+
+        if secret_key.lower() in PLACEHOLDER_SECRET_KEYS:
+            raise ValueError(
+                "SECRET_KEY is set to a known placeholder value. Set a unique, "
+                "randomly generated SECRET_KEY when ENVIRONMENT=production."
+            )
+
+        if len(secret_key) < SECRET_KEY_MIN_LENGTH:
+            raise ValueError(
+                f"SECRET_KEY must be at least {SECRET_KEY_MIN_LENGTH} characters "
+                "when ENVIRONMENT=production."
+            )
+
+        return self
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod

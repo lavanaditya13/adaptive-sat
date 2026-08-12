@@ -12,7 +12,9 @@ def test_signup_request_rejects_invalid_email():
 
 
 def test_signup_request_defaults_role_to_student():
-    request = SignupRequest(email="student@example.com", password="secret", full_name="Student One")
+    request = SignupRequest(
+        email="student@example.com", password="secretpass", full_name="Student One"
+    )
 
     assert request.role == "student"
 

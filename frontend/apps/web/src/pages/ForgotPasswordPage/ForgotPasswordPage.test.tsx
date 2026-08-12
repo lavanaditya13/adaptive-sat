@@ -41,27 +41,27 @@ describe('ForgotPasswordPage', () => {
     expect(screen.getByText(/reset your password/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /send reset link/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /back to login/i })).toBeInTheDocument();
   });
 
-  it('shows a validation error and does not call the API for an invalid email', async () => {
+  it('shows a destructive toast and does not call the API when the email is empty', async () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.type(screen.getByLabelText(/email/i), 'not-an-email');
     await user.click(screen.getByRole('button', { name: /send reset link/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/invalid email address/i)).toBeInTheDocument();
+      expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
     });
     expect(requestPasswordReset).not.toHaveBeenCalled();
   });
 
-  it('submits the email, shows a success toast, and navigates to login', async () => {
+  it('submits the trimmed email, shows a success toast, and navigates to login', async () => {
     vi.mocked(requestPasswordReset).mockResolvedValue(undefined);
     const user = userEvent.setup();
     renderPage();
 
-    await user.type(screen.getByLabelText(/email/i), 'student@example.com');
+    await user.type(screen.getByLabelText(/email/i), '  student@example.com  ');
     await user.click(screen.getByRole('button', { name: /send reset link/i }));
 
     await waitFor(() => {
@@ -82,5 +82,6 @@ describe('ForgotPasswordPage', () => {
     await waitFor(() => {
       expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
     });
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 });
