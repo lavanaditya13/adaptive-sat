@@ -1,11 +1,17 @@
-// The whole launcher is one fixed, bottom-right-anchored shell that morphs
+// The whole launcher is one fixed, top-right-anchored shell that morphs
 // between a small round trigger and the full calculator panel by animating
 // width/height/border-radius directly on itself -- there's no separate
 // modal/backdrop popping up over the page. This reads as the icon growing
 // into the calculator in place, matching iOS AssistiveTouch's bubble-expands
 // behavior, rather than a dialog appearing.
+//
+// `top-16` (not `top-5`) deliberately clears the app shell's own sticky
+// header (`Header.styles.ts`'s `min-h-[52px]`, `sticky top-0`) -- this shell
+// is `fixed` to the viewport, independent of where SessionHeader sits in the
+// page's normal document flow, so it would otherwise sit half-behind/half-
+// over the app header's bottom border regardless of scroll position.
 export const SHELL_BASE_STYLES =
-  'fixed bottom-5 right-5 z-50 overflow-hidden bg-card shadow-xl ring-1 ring-foreground/10 transition-[width,height,border-radius] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]';
+  'fixed top-16 right-5 z-50 overflow-hidden bg-card shadow-xl ring-1 ring-foreground/10 transition-[width,height,border-radius] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]';
 export const SHELL_CLOSED_STYLES = 'size-12 rounded-full';
 export const SHELL_OPEN_STYLES = 'h-[min(75vh,640px)] w-[min(92vw,880px)] rounded-2xl';
 
@@ -18,14 +24,16 @@ export const TRIGGER_BUTTON_VISIBLE_STYLES = 'opacity-100';
 export const TRIGGER_BUTTON_HIDDEN_STYLES = 'pointer-events-none opacity-0';
 
 // The panel is sized to the shell's fully-open dimensions at all times --
-// never animated itself -- and anchored to the same bottom-right corner, so
-// while the shell is collapsed it's simply clipped away by the shell's own
+// never animated itself -- and anchored to the same top-right corner as the
+// shell (so it grows *down and left* from the icon, matching the shell being
+// pinned near the top of the viewport rather than the bottom), so while the
+// shell is collapsed it's simply clipped away by the shell's own
 // `overflow-hidden` instead of being squeezed into the small circle. That
 // means the Desmos containers inside it never see a resize caused by our own
 // open/close animation, only a clip + opacity change, so nothing needs to
 // call `.resize()` on them.
 export const PANEL_STYLES =
-  'absolute bottom-0 right-0 flex h-[min(75vh,640px)] w-[min(92vw,880px)] flex-col gap-3 p-4 transition-opacity duration-200';
+  'absolute top-0 right-0 flex h-[min(75vh,640px)] w-[min(92vw,880px)] flex-col gap-3 p-4 transition-opacity duration-200';
 export const PANEL_VISIBLE_STYLES = 'opacity-100 delay-100';
 export const PANEL_HIDDEN_STYLES = 'pointer-events-none opacity-0';
 
