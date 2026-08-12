@@ -196,6 +196,7 @@ class QuestionBreakdownItem(BaseModel):
     is_correct: bool
     confidence_level: Optional[int] = None
     explanation: Optional[str] = None
+    time_spent_seconds: Optional[int] = None
 
 
 class PracticeCompleteResponse(BaseModel):
