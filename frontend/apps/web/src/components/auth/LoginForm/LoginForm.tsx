@@ -1,6 +1,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { Button } from '@workspace/ui/components/button';
 import { Input } from '@workspace/ui/components/input';
 import { Label } from '@workspace/ui/components/label';
@@ -38,6 +39,7 @@ import {
   NO_ACCOUNT,
   SIGNUP_LINK,
   LOGIN_ERROR_TITLE,
+  INVALID_CREDENTIALS_DESCRIPTION,
 } from './LoginForm.constants';
 
 export function LoginForm() {
@@ -58,9 +60,19 @@ export function LoginForm() {
       setUser(user);
       navigate(ROUTES.DASHBOARD);
     } catch (error) {
+      // The backend intentionally returns the same generic 401 for "wrong
+      // password" and "no account with this email" -- distinguishing them
+      // here would let an attacker enumerate registered emails. Instead,
+      // every credential failure nudges toward signup without confirming or
+      // denying that the account exists.
+      const description =
+        isAxiosError(error) && error.response?.status === 401
+          ? INVALID_CREDENTIALS_DESCRIPTION
+          : getApiErrorDetail(error);
+
       toast({
         title: LOGIN_ERROR_TITLE,
-        description: getApiErrorDetail(error),
+        description,
         variant: 'destructive',
       });
     }

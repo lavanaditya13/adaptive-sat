@@ -9,3 +9,5 @@ export const SUBMITTING_LABEL = 'Signing in...';
 export const NO_ACCOUNT = "Don't have an account?";
 export const SIGNUP_LINK = 'Sign up free';
 export const LOGIN_ERROR_TITLE = 'Login failed';
+export const INVALID_CREDENTIALS_DESCRIPTION =
+  "Incorrect email or password. Don't have an account yet? Create one below.";
