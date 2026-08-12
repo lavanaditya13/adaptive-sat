@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Check, X } from 'lucide-react';
+import { MathText } from '@/components/common/MathText/MathText';
 import { formatDuration } from '../resultsFormat';
 import type { QuestionBreakdownItem } from '@/types/api';
 import {
@@ -67,14 +68,18 @@ export function QuestionBreakdownAccordion({ items }: QuestionBreakdownAccordion
                 </div>
                 <div className={ROW_BODY_STYLES}>
                   <span className={ROW_TOPIC_STYLES}>{item.topic_display_name}</span>
-                  <span className={ROW_PROMPT_STYLES}>{item.prompt}</span>
+                  <span className={ROW_PROMPT_STYLES}>
+                    <MathText text={item.prompt} />
+                  </span>
                 </div>
                 <span className={ROW_TIME_STYLES}>{formatDuration(item.time_spent_seconds ?? 0)}</span>
               </button>
 
               {isOpen && (
                 <div className={PANEL_STYLES}>
-                  <p className={PANEL_PROMPT_STYLES}>{item.prompt}</p>
+                  <p className={PANEL_PROMPT_STYLES}>
+                    <MathText text={item.prompt} />
+                  </p>
                   <div className={OPTIONS_LIST_STYLES}>
                     {OPTION_KEYS.map((key) => {
                       const text = item.choices[key];
@@ -94,14 +99,18 @@ export function QuestionBreakdownAccordion({ items }: QuestionBreakdownAccordion
                       return (
                         <div key={key} className={`${OPTION_BASE_STYLES} ${optionStyles}`}>
                           <span className={labelStyles}>{key}</span>
-                          <span className="flex-1">{text}</span>
+                          <span className="flex-1">
+                            <MathText text={text} />
+                          </span>
                         </div>
                       );
                     })}
                   </div>
                   <div className={EXPLANATION_BOX_STYLES}>
                     <p className={EXPLANATION_HEADING_STYLES}>{EXPLANATION_LABEL}</p>
-                    <p className={EXPLANATION_TEXT_STYLES}>{item.explanation ?? NO_EXPLANATION_TEXT}</p>
+                    <p className={EXPLANATION_TEXT_STYLES}>
+                      {item.explanation ? <MathText text={item.explanation} /> : NO_EXPLANATION_TEXT}
+                    </p>
                   </div>
                 </div>
               )}

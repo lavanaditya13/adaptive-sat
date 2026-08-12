@@ -1,4 +1,5 @@
 export { ThemeProvider } from './theme-provider';
+export { MathText } from './common/MathText/MathText';
 export { AppShell } from './layout/AppShell';
 export { Sidebar } from './layout/Sidebar';
 export { Header } from './layout/Header';
