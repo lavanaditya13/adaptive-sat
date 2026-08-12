@@ -1,0 +1,107 @@
+name: Dedupe Duplicate Questions
+
+# On-demand cleanup for duplicate `questions` rows left over from *before*
+# seed_sat_questions.py's upsert-by-normalized-prompt fix (PR #93): every
+# math-notation revision to the seed data (plain ASCII -> regex-converted
+# LaTeX -> hand-fixed LaTeX) previously *inserted* a fresh copy of each
+# question instead of updating the existing row, so a database seeded across
+# any of those revisions likely has up to 3 copies of the same 49 math
+# questions, served at random -- this is why the same-looking question can
+# render with the nice math font on one attempt and as plain/broken text
+# (raw "\frac" etc.) on another. See scripts/dedupe_questions.py's own
+# docstring for the full history and its exact matching/safety rules.
+#
+# Deliberately a manually-triggered workflow, not wired into the regular
+# push-triggered seed-database.yml pipeline: the insert-instead-of-update
+# bug is already fixed and can't recur, so this doesn't need to run --  and
+# delete rows -- on every push forever. Trigger it from the Actions tab:
+# dry run first (leave "execute" unchecked) to review what it *would*
+# delete, then run again with "execute" checked to actually apply it.
+#
+# dedupe_questions.py only ever deletes a duplicate with zero
+# Attempt/PracticeSessionQuestion references -- any duplicate a student has
+# actually answered is left in place and reported for manual review instead.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which database to clean up"
+        required: true
+        type: choice
+        options:
+          - preview
+          - production
+      execute:
+        description: "Actually delete (unchecked = dry run only, changes nothing)"
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  dedupe-preview:
+    name: Dedupe Preview DB (develop)
+    if: inputs.target == 'preview'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: seed-db-preview
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Symlink pyproject.toml / poetry.lock
+        run: |
+          ln -sf poetry-project.toml pyproject.toml
+          ln -sf poetry-project.lock poetry.lock
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --only main
+
+      - name: Dedupe questions
+        run: poetry run python scripts/dedupe_questions.py ${{ inputs.execute && '--execute' || '' }}
+        env:
+          DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+
+  dedupe-production:
+    name: Dedupe Production DB (main)
+    if: inputs.target == 'production'
+    runs-on: ubuntu-latest
+    # Same reviewer gate as seed-database.yml's production job -- requires a
+    # GitHub Environment named "production" with a required reviewer
+    # configured (Settings -> Environments -> production).
+    environment: production
+    concurrency:
+      group: seed-db-production
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Symlink pyproject.toml / poetry.lock
+        run: |
+          ln -sf poetry-project.toml pyproject.toml
+          ln -sf poetry-project.lock poetry.lock
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --only main
+
+      - name: Dedupe questions
+        run: poetry run python scripts/dedupe_questions.py ${{ inputs.execute && '--execute' || '' }}
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
