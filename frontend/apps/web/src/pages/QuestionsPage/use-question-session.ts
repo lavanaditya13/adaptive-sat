@@ -90,6 +90,10 @@ export function useQuestionSession() {
     try {
       const result = await completePractice();
       setLatestResult(result);
+      // This session IS the latest result, so seed the cache the Results tab
+      // reads instead of invalidating it — same data, one fewer round trip,
+      // and no empty flash on arrival.
+      queryClient.setQueryData(queryKeys.practice.latestResult, result);
       // Completing a session moves dashboard metrics (questions answered,
       // sessions completed, estimated score) — drop the pre-session cache.
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });

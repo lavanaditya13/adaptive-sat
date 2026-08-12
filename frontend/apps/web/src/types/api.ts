@@ -146,6 +146,10 @@ interface QuestionBreakdownItem {
 
 interface CompleteResponse {
   status: 'completed';
+  /* Present on every response from a backend that has the results endpoints;
+     optional so a summary cached by an older build still type-checks. */
+  session_id?: number | null;
+  completed_at?: string | null;
   score: {
     correct: number;
     incorrect: number;

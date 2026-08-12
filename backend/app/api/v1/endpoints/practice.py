@@ -24,6 +24,7 @@ from app.services.practice_service import (
     abandon_practice_session,
     complete_practice_session,
     get_current_question,
+    get_latest_session_result,
     get_next_question,
     get_skill_tree,
     set_selected_section,
@@ -120,6 +121,17 @@ async def complete_session(
     db: AsyncSession = Depends(get_db),
 ):
     return await complete_practice_session(db=db, student=current_user)
+
+
+@router.get("/results/latest", response_model=PracticeCompleteResponse)
+async def latest_result(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Most recently completed session's summary. 404s when the student has
+    never finished one, which the Results tab renders as its empty state.
+    """
+    return await get_latest_session_result(db=db, student=current_user)
 
 
 @router.put("/attempts/{attempt_id}", response_model=UpdateAttemptResponse)

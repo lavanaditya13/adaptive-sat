@@ -5,4 +5,7 @@ export const EMPTY_CARD_STYLES =
 export const EMPTY_TITLE_STYLES = 'text-lg font-bold text-ink';
 export const EMPTY_DESCRIPTION_STYLES = 'text-sm text-ink-muted';
 export const CTA_CONTAINER_STYLES = 'flex gap-3';
+export const SKELETON_SUMMARY_STYLES = 'h-[220px] w-full rounded-2xl';
+export const SKELETON_ROW_STYLES = 'h-16 w-full rounded-xl';
+export const SKELETON_LIST_STYLES = 'space-y-3';
 export const CTA_BUTTON_STYLES = 'flex-1 h-auto py-[14px] text-[13px] font-semibold rounded-xl';

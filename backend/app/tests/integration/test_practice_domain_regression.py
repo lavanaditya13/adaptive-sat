@@ -20,6 +20,7 @@ behavior belongs in the matching tests/services/test_*.py file instead.
 from __future__ import annotations
 
 import asyncio
+import uuid
 from contextlib import asynccontextmanager
 
 import pytest
@@ -494,3 +495,116 @@ async def test_retried_answer_with_same_idempotency_key_does_not_create_duplicat
             await db.execute(select(Attempt).where(Attempt.student_id == student.id))
         ).scalars().all()
     assert len(attempts) == 1
+
+
+# --- GET /practice/results/latest -------------------------------------------
+# The Results tab is reachable without having just finished a session (direct
+# link, refresh, new device), so its summary has to be re-readable from the
+# database rather than only from the client-side store /complete populates.
+
+
+@pytest.mark.asyncio
+async def test_latest_result_reports_no_completed_session_as_404(student, seeded_questions):
+    """A student who has never finished a session gets a 404, which the
+    Results tab renders as its empty state -- not as an error.
+    """
+    async with _request_scoped_session() as db:
+        with pytest.raises(HTTPException) as exc_info:
+            await practice_service.get_latest_session_result(db, student)
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_latest_result_matches_the_completion_response_it_re_reads(student, seeded_questions):
+    """The core bug this endpoint fixes: after one session, opening Results
+    must show that session's score and breakdown, identical to what
+    /complete returned in the flow that produced it.
+    """
+    await _select_math_section(student)
+
+    completed = await _run_full_section_session(
+        student, wrong_prompts=frozenset(seeded_questions["weak_prompts"])
+    )
+
+    async with _request_scoped_session() as db:
+        latest = await practice_service.get_latest_session_result(db, student)
+
+    assert latest.session_id is not None
+    assert latest.completed_at is not None
+    assert latest == completed
+
+
+@pytest.mark.asyncio
+async def test_latest_result_returns_the_most_recent_of_several_completed_sessions(
+    student, seeded_questions
+):
+    await _select_math_section(student)
+
+    first = await _run_full_section_session(
+        student, wrong_prompts=frozenset(seeded_questions["weak_prompts"])
+    )
+    second = await _run_full_section_session(student)
+
+    # Distinguishable by score, so the assertion below can't pass on the
+    # wrong session by coincidence.
+    assert first.session_id != second.session_id
+    assert first.score.correct != second.score.correct
+
+    async with _request_scoped_session() as db:
+        latest = await practice_service.get_latest_session_result(db, student)
+
+    assert latest.session_id == second.session_id
+    assert latest.score.correct == second.score.correct
+
+
+@pytest.mark.asyncio
+async def test_latest_result_ignores_abandoned_and_in_progress_sessions(student, seeded_questions):
+    """Only scored sessions are results. An abandoned one, or the one the
+    student is in the middle of right now, must not displace the last
+    session they actually finished.
+    """
+    await _select_math_section(student)
+
+    completed = await _run_full_section_session(student)
+
+    async with _request_scoped_session() as db:
+        await practice_service.start_practice_session(
+            db, PracticeStartRequest(mode="section", question_count=4), student
+        )
+    async with _request_scoped_session() as db:
+        await practice_service.abandon_practice_session(db, student)
+
+    async with _request_scoped_session() as db:
+        await practice_service.start_practice_session(
+            db, PracticeStartRequest(mode="section", question_count=4), student
+        )
+
+    async with _request_scoped_session() as db:
+        latest = await practice_service.get_latest_session_result(db, student)
+
+    assert latest.session_id == completed.session_id
+
+
+@pytest.mark.asyncio
+async def test_latest_result_is_scoped_to_the_requesting_student(student, seeded_questions):
+    """One student's finished session must never surface on another's
+    Results tab -- the query filters on student_id, not just status.
+    """
+    await _select_math_section(student)
+    await _run_full_section_session(student)
+
+    async with SessionLocal() as db:
+        other = User(
+            email=f"other-student-{uuid.uuid4().hex}@example.com",
+            full_name="Other Student",
+            role="student",
+            is_active=True,
+        )
+        db.add(other)
+        await db.commit()
+        await db.refresh(other)
+
+    async with _request_scoped_session() as db:
+        with pytest.raises(HTTPException) as exc_info:
+            await practice_service.get_latest_session_result(db, other)
+    assert exc_info.value.status_code == 404

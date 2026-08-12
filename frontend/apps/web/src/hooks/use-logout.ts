@@ -32,6 +32,10 @@ export function useLogout() {
       clearResults();
       queryClient.removeQueries({ queryKey: queryKeys.auth.user });
       queryClient.removeQueries({ queryKey: queryKeys.dashboard.all });
+      // Per-student scores — dropping the store alone would leave the next
+      // sign-in on this device rendering the previous student's results from
+      // cache before their own fetch resolves.
+      queryClient.removeQueries({ queryKey: queryKeys.practice.latestResult });
       navigate(ROUTES.LOGGED_OUT, { replace: true });
     }
   }, [

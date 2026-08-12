@@ -849,51 +849,26 @@ async def expire_stale_practice_sessions(db: AsyncSession) -> int:
     return expired_count
 
 
-async def complete_practice_session(
+async def _build_session_result(
     db: AsyncSession,
-    student: User,
+    session: PracticeSession,
+    attempts: list[Attempt] | None = None,
 ) -> PracticeCompleteResponse:
-    session = await _get_active_session_for_student(db=db, student_id=student.id)
+    """Assemble the results payload for one completed session.
 
-    attempts_result = await db.execute(
-        select(Attempt).where(Attempt.practice_session_id == session.id)
-    )
-    attempts = list(attempts_result.scalars().all())
-
-    if not attempts:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot complete a session with no answers",
+    Read-only and side-effect free, so it serves both the completion call and
+    any later re-read of the same session (GET /practice/results/latest).
+    `attempts` is accepted so the completion path doesn't re-query rows it
+    already loaded.
+    """
+    if attempts is None:
+        attempts_result = await db.execute(
+            select(Attempt).where(Attempt.practice_session_id == session.id)
         )
-
-    # Atomic conditional update rather than a plain read-then-write: two
-    # concurrent /complete calls could otherwise both pass the active-session
-    # fetch above and both flip status + generate a duplicate study plan.
-    # The WHERE clause re-checks the status hasn't already moved out of the
-    # active set since we read it — if a concurrent request already
-    # completed it, this affects 0 rows instead of clobbering that result.
-    update_result = await db.execute(
-        update(PracticeSession)
-        .where(
-            PracticeSession.id == session.id,
-            PracticeSession.status.in_(ACTIVE_PRACTICE_SESSION_STATUSES),
-        )
-        .values(status=PracticeSessionStatus.COMPLETED)
-    )
-
-    if update_result.rowcount == 0:
-        await db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="This practice session was already completed by a concurrent request.",
-        )
-
-    session.status = PracticeSessionStatus.COMPLETED
+        attempts = list(attempts_result.scalars().all())
 
     correct = sum(1 for attempt in attempts if attempt.is_correct)
     incorrect = len(attempts) - correct
-    await db.commit()
-
     total = len(attempts)
     percentage = round((correct / total) * 100, 1) if total else 0.0
 
@@ -941,7 +916,7 @@ async def complete_practice_session(
 
     if session.mode == "section" and session.section_id is not None:
         completed_count = await _count_completed_section_sessions(
-            db=db, student_id=student.id, section_id=session.section_id
+            db=db, student_id=session.student_id, section_id=session.section_id
         )
         required_sessions = REQUIRED_SECTION_SESSIONS_FOR_ADAPTIVE_UNLOCK
 
@@ -952,13 +927,10 @@ async def complete_practice_session(
             remaining_sessions=max(required_sessions - completed_count, 0),
         )
 
-    await generate_study_plan_for_student(
-        db=db,
-        student_id=session.student_id,
-    )
-
     return PracticeCompleteResponse(
         status=PracticeSessionStatus.COMPLETED,
+        session_id=session.id,
+        completed_at=session.updated_at,
         score=ScoreSummary(
             correct=correct,
             incorrect=incorrect,
@@ -971,6 +943,92 @@ async def complete_practice_session(
         section=section_code,
         section_display_name=section_display_name,
     )
+
+
+async def get_latest_session_result(
+    db: AsyncSession,
+    student: User,
+) -> PracticeCompleteResponse:
+    """Re-read the student's most recently completed session.
+
+    Backs the Results tab, which is reachable without having just finished a
+    session (direct link, refresh, new device) — cases where the client-side
+    store that POST /practice/complete populates is empty.
+
+    Only `completed` sessions qualify: abandoned and expired ones were never
+    scored, and an in-progress one belongs to the practice flow, not results.
+    """
+    result = await db.execute(
+        select(PracticeSession)
+        .where(
+            PracticeSession.student_id == student.id,
+            PracticeSession.status == PracticeSessionStatus.COMPLETED,
+        )
+        .order_by(PracticeSession.updated_at.desc(), PracticeSession.id.desc())
+        .limit(1)
+    )
+    session = result.scalar_one_or_none()
+
+    if session is None:
+        raise HTTPException(status_code=404, detail="No completed practice sessions yet")
+
+    return await _build_session_result(db=db, session=session)
+
+
+async def complete_practice_session(
+    db: AsyncSession,
+    student: User,
+) -> PracticeCompleteResponse:
+    session = await _get_active_session_for_student(db=db, student_id=student.id)
+
+    attempts_result = await db.execute(
+        select(Attempt).where(Attempt.practice_session_id == session.id)
+    )
+    attempts = list(attempts_result.scalars().all())
+
+    if not attempts:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot complete a session with no answers",
+        )
+
+    # Atomic conditional update rather than a plain read-then-write: two
+    # concurrent /complete calls could otherwise both pass the active-session
+    # fetch above and both flip status + generate a duplicate study plan.
+    # The WHERE clause re-checks the status hasn't already moved out of the
+    # active set since we read it — if a concurrent request already
+    # completed it, this affects 0 rows instead of clobbering that result.
+    update_result = await db.execute(
+        update(PracticeSession)
+        .where(
+            PracticeSession.id == session.id,
+            PracticeSession.status.in_(ACTIVE_PRACTICE_SESSION_STATUSES),
+        )
+        .values(status=PracticeSessionStatus.COMPLETED)
+    )
+
+    if update_result.rowcount == 0:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="This practice session was already completed by a concurrent request.",
+        )
+
+    session.status = PracticeSessionStatus.COMPLETED
+
+    await db.commit()
+    # The Core UPDATE above bumped `updated_at` via its onupdate default, but
+    # the session factory uses expire_on_commit=False, so the in-memory object
+    # still holds the pre-update value. Re-read it so `completed_at` matches
+    # what GET /practice/results/latest will later report for this session.
+    await db.refresh(session)
+
+    await generate_study_plan_for_student(
+        db=db,
+        student_id=session.student_id,
+    )
+
+    return await _build_session_result(db=db, session=session, attempts=attempts)
 
 
 async def update_attempt_answer(
