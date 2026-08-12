@@ -4,6 +4,7 @@ export const SUBTITLE_STYLES = 'mt-1 text-sm text-muted-foreground';
 export const OAUTH_SECTION_STYLES = 'mt-6';
 export const formStyles = 'mt-6 flex flex-col gap-4';
 export const FIELD_STYLES = 'space-y-2';
+export const NAME_ROW_STYLES = 'grid grid-cols-1 gap-4 sm:grid-cols-2';
 export const inputStyles = 'w-full';
 export const ERROR_STYLES = 'text-sm text-destructive';
 export const RADIO_OPTION_STYLES = 'flex items-center space-x-2';

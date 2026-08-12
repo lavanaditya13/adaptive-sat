@@ -1,6 +1,7 @@
 export const TITLE = 'Create your account';
 export const SUBTITLE = 'Start your adaptive SAT prep in minutes.';
-export const FULL_NAME_LABEL = 'Full Name';
+export const FIRST_NAME_LABEL = 'First name';
+export const LAST_NAME_LABEL = 'Last name';
 export const EMAIL_LABEL = 'Email';
 export const PASSWORD_LABEL = 'Password';
 export const ROLE_LABEL = 'Role';

@@ -142,6 +142,7 @@ interface QuestionBreakdownItem {
   is_correct: boolean;
   confidence_level: number | null;
   explanation: string | null;
+  time_spent_seconds: number | null;
 }
 
 interface CompleteResponse {

@@ -18,6 +18,7 @@ import {
   OAUTH_SECTION_STYLES,
   formStyles,
   FIELD_STYLES,
+  NAME_ROW_STYLES,
   inputStyles,
   ERROR_STYLES,
   RADIO_OPTION_STYLES,
@@ -29,7 +30,8 @@ import {
 import {
   TITLE,
   SUBTITLE,
-  FULL_NAME_LABEL,
+  FIRST_NAME_LABEL,
+  LAST_NAME_LABEL,
   EMAIL_LABEL,
   PASSWORD_LABEL,
   ROLE_LABEL,
@@ -81,10 +83,18 @@ export function SignupForm() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className={formStyles}>
-        <div className={FIELD_STYLES}>
-          <Label htmlFor="full_name">{FULL_NAME_LABEL}</Label>
-          <Input id="full_name" {...register('full_name')} className={inputStyles} />
-          {errors.full_name && <p className={ERROR_STYLES}>{errors.full_name.message}</p>}
+        <div className={NAME_ROW_STYLES}>
+          <div className={FIELD_STYLES}>
+            <Label htmlFor="first_name">{FIRST_NAME_LABEL}</Label>
+            <Input id="first_name" {...register('first_name')} className={inputStyles} />
+            {errors.first_name && <p className={ERROR_STYLES}>{errors.first_name.message}</p>}
+          </div>
+
+          <div className={FIELD_STYLES}>
+            <Label htmlFor="last_name">{LAST_NAME_LABEL}</Label>
+            <Input id="last_name" {...register('last_name')} className={inputStyles} />
+            {errors.last_name && <p className={ERROR_STYLES}>{errors.last_name.message}</p>}
+          </div>
         </div>
 
         <div className={FIELD_STYLES}>

@@ -48,7 +48,8 @@ def test_signup_request_rejects_short_password(short_password):
         SignupRequest(
             email="student@example.com",
             password=short_password,
-            full_name="Student One",
+            first_name="Student",
+            last_name="One",
         )
 
     assert "at least 8 characters" in str(exc_info.value)
@@ -58,7 +59,8 @@ def test_signup_request_accepts_password_at_minimum_length():
     request = SignupRequest(
         email="student@example.com",
         password="a" * PASSWORD_MIN_LENGTH,
-        full_name="Student One",
+        first_name="Student",
+        last_name="One",
     )
 
     assert request.password == "a" * PASSWORD_MIN_LENGTH
@@ -86,7 +88,8 @@ def test_signup_request_defaults_to_student_role():
     request = SignupRequest(
         email="student@example.com",
         password="a-good-password",
-        full_name="Student One",
+        first_name="Student",
+        last_name="One",
     )
 
     assert request.role == "student"
@@ -98,7 +101,8 @@ def test_signup_request_rejects_self_assigned_role(role):
         SignupRequest(
             email="student@example.com",
             password="a-good-password",
-            full_name="Student One",
+            first_name="Student",
+            last_name="One",
             role=role,
         )
 

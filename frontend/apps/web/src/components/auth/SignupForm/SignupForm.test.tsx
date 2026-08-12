@@ -48,7 +48,8 @@ describe('SignupForm', () => {
   it('renders the name, email, password and role fields plus the submit button', () => {
     renderSignupForm();
 
-    expect(screen.getByLabelText('Full Name')).toBeInTheDocument();
+    expect(screen.getByLabelText('First name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Last name')).toBeInTheDocument();
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Student' })).toBeInTheDocument();
@@ -59,7 +60,8 @@ describe('SignupForm', () => {
     const user = userEvent.setup();
     renderSignupForm();
 
-    await user.type(screen.getByLabelText('Full Name'), 'Test Student');
+    await user.type(screen.getByLabelText('First name'), 'Test');
+    await user.type(screen.getByLabelText('Last name'), 'Student');
     await user.type(screen.getByLabelText('Email'), 'student@example.com');
     await user.type(screen.getByLabelText('Password'), 'short');
     await user.click(screen.getByRole('button', { name: /create account/i }));
@@ -68,19 +70,33 @@ describe('SignupForm', () => {
     expect(signup).not.toHaveBeenCalled();
   });
 
+  it('shows a validation error when the first name is missing', async () => {
+    const user = userEvent.setup();
+    renderSignupForm();
+
+    await user.type(screen.getByLabelText('Email'), 'student@example.com');
+    await user.type(screen.getByLabelText('Password'), 'password123');
+    await user.click(screen.getByRole('button', { name: /create account/i }));
+
+    expect(await screen.findByText(/first name is required/i)).toBeInTheDocument();
+    expect(signup).not.toHaveBeenCalled();
+  });
+
   it('submits valid details and navigates to the check-email step', async () => {
     vi.mocked(signup).mockResolvedValue(USER);
     const user = userEvent.setup();
     renderSignupForm();
 
-    await user.type(screen.getByLabelText('Full Name'), 'Test Student');
+    await user.type(screen.getByLabelText('First name'), 'Test');
+    await user.type(screen.getByLabelText('Last name'), 'Student');
     await user.type(screen.getByLabelText('Email'), 'student@example.com');
     await user.type(screen.getByLabelText('Password'), 'password123');
     await user.click(screen.getByRole('button', { name: /create account/i }));
 
     await waitFor(() => {
       expect(signup).toHaveBeenCalledWith({
-        full_name: 'Test Student',
+        first_name: 'Test',
+        last_name: 'Student',
         email: 'student@example.com',
         password: 'password123',
         role: 'student',
@@ -89,12 +105,30 @@ describe('SignupForm', () => {
     expect(navigateMock).toHaveBeenCalled();
   });
 
+  it('submits with an empty last name for a mononym', async () => {
+    vi.mocked(signup).mockResolvedValue(USER);
+    const user = userEvent.setup();
+    renderSignupForm();
+
+    await user.type(screen.getByLabelText('First name'), 'Cher');
+    await user.type(screen.getByLabelText('Email'), 'cher@example.com');
+    await user.type(screen.getByLabelText('Password'), 'password123');
+    await user.click(screen.getByRole('button', { name: /create account/i }));
+
+    await waitFor(() => {
+      expect(signup).toHaveBeenCalledWith(
+        expect.objectContaining({ first_name: 'Cher', last_name: '' })
+      );
+    });
+  });
+
   it('shows an error toast when signing up fails', async () => {
     vi.mocked(signup).mockRejectedValue(new Error('email already registered'));
     const user = userEvent.setup();
     renderSignupForm();
 
-    await user.type(screen.getByLabelText('Full Name'), 'Test Student');
+    await user.type(screen.getByLabelText('First name'), 'Test');
+    await user.type(screen.getByLabelText('Last name'), 'Student');
     await user.type(screen.getByLabelText('Email'), 'student@example.com');
     await user.type(screen.getByLabelText('Password'), 'password123');
     await user.click(screen.getByRole('button', { name: /create account/i }));

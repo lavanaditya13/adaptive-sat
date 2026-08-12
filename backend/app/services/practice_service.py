@@ -903,6 +903,7 @@ async def _build_session_result(
             is_correct=attempt.is_correct,
             confidence_level=attempt.confidence_level,
             explanation=question.explanation,
+            time_spent_seconds=attempt.time_spent_seconds,
         )
         for _session_question, attempt, question in breakdown_result.all()
     ]

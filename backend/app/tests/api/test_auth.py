@@ -67,7 +67,8 @@ async def test_signup_returns_session_and_user(monkeypatch):
         SimpleNamespace(
             email="student@example.com",
             password="secret",
-            full_name="Student One",
+            first_name="Student",
+            last_name="One",
             role="student",
         ),
         response,
@@ -77,6 +78,68 @@ async def test_signup_returns_session_and_user(monkeypatch):
     assert result.user.user_id == 1
     assert result.user.email == "student@example.com"
     assert "set-cookie" not in response.headers
+
+
+@pytest.mark.asyncio
+async def test_signup_composes_full_name_from_first_and_last_name(monkeypatch):
+    """SignupRequest carries first_name/last_name; the endpoint must compose
+    them into the single full_name column create_user persists."""
+    created_user = _make_user(password="hashed")
+    response = Response()
+    create_user_mock = AsyncMock(return_value=created_user)
+
+    monkeypatch.setattr(
+        auth_module.user_repository, "get_by_email", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(auth_module.user_repository, "create_user", create_user_mock)
+    monkeypatch.setattr(auth_module, "create_access_token", lambda user_id: "token-123")
+    monkeypatch.setattr(
+        auth_module, "issue_signup_verification_email", AsyncMock(return_value=None)
+    )
+
+    await auth_module.signup(
+        SimpleNamespace(
+            email="student@example.com",
+            password="secret",
+            first_name="Student",
+            last_name="One",
+            role="student",
+        ),
+        response,
+        db=SimpleNamespace(),
+    )
+
+    assert create_user_mock.call_args.kwargs["obj_in"].full_name == "Student One"
+
+
+@pytest.mark.asyncio
+async def test_signup_composes_full_name_from_first_name_alone_for_a_mononym(monkeypatch):
+    created_user = _make_user(password="hashed")
+    response = Response()
+    create_user_mock = AsyncMock(return_value=created_user)
+
+    monkeypatch.setattr(
+        auth_module.user_repository, "get_by_email", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(auth_module.user_repository, "create_user", create_user_mock)
+    monkeypatch.setattr(auth_module, "create_access_token", lambda user_id: "token-123")
+    monkeypatch.setattr(
+        auth_module, "issue_signup_verification_email", AsyncMock(return_value=None)
+    )
+
+    await auth_module.signup(
+        SimpleNamespace(
+            email="cher@example.com",
+            password="secret",
+            first_name="Cher",
+            last_name="",
+            role="student",
+        ),
+        response,
+        db=SimpleNamespace(),
+    )
+
+    assert create_user_mock.call_args.kwargs["obj_in"].full_name == "Cher"
 
 
 @pytest.mark.asyncio
@@ -100,7 +163,8 @@ async def test_signup_continues_when_verification_email_fails(monkeypatch):
         SimpleNamespace(
             email="student@example.com",
             password="secret",
-            full_name="Student One",
+            first_name="Student",
+            last_name="One",
             role="student",
         ),
         response,
@@ -135,7 +199,8 @@ async def test_signup_triggers_verification_email(monkeypatch, unverified_user):
         SimpleNamespace(
             email="student@example.com",
             password="secret",
-            full_name="Student One",
+            first_name="Student",
+            last_name="One",
             role="student",
         ),
         response,
@@ -183,7 +248,8 @@ async def test_signup_unverified_existing_user_returns_actionable_conflict(monke
             SimpleNamespace(
                 email="student@example.com",
                 password="secret",
-                full_name="Student One",
+                first_name="Student",
+                last_name="One",
                 role="student",
             ),
             response,
@@ -210,7 +276,8 @@ async def test_signup_existing_oauth_only_user_returns_google_message(monkeypatc
             SimpleNamespace(
                 email="student@example.com",
                 password="secret",
-                full_name="Student One",
+                first_name="Student",
+                last_name="One",
                 role="student",
             ),
             response,
