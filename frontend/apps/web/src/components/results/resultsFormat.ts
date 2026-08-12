@@ -1,17 +1,5 @@
 import type { QuestionBreakdownItem } from '@/types/api';
 
-/**
- * `QuestionBreakdownItem` (frontend/apps/web/src/types/api.ts) does not yet declare
- * per-question timing, but the results screen's contract with the backend includes
- * it (the underlying `Attempt.time_spent_seconds`). We extend the shared type
- * locally instead of editing types/api.ts, which is outside this screen's scope -
- * the field is read defensively (falls back to 0) in case the shared type catches up
- * before the field is actually present on a given response.
- */
-export interface QuestionBreakdownItemWithTiming extends QuestionBreakdownItem {
-  time_spent_seconds?: number | null;
-}
-
 /** Formats a duration in seconds as `m:ss`, matching the design's `formatClock`. */
 export function formatDuration(totalSeconds: number): string {
   const safeSeconds = Math.max(0, Math.floor(totalSeconds || 0));
@@ -20,7 +8,7 @@ export function formatDuration(totalSeconds: number): string {
   return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
 }
 
-export function sumTimeSpentSeconds(items: QuestionBreakdownItemWithTiming[]): number {
+export function sumTimeSpentSeconds(items: QuestionBreakdownItem[]): number {
   return items.reduce((total, item) => total + (item.time_spent_seconds ?? 0), 0);
 }
 

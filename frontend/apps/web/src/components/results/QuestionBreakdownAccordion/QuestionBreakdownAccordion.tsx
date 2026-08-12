@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, X } from 'lucide-react';
-import { formatDuration, type QuestionBreakdownItemWithTiming } from '../resultsFormat';
+import { formatDuration } from '../resultsFormat';
+import type { QuestionBreakdownItem } from '@/types/api';
 import {
   SECTION_TITLE,
   EXPLANATION_LABEL,
@@ -35,7 +36,7 @@ import {
 } from './QuestionBreakdownAccordion.styles';
 
 interface QuestionBreakdownAccordionProps {
-  items: QuestionBreakdownItemWithTiming[];
+  items: QuestionBreakdownItem[];
 }
 
 export function QuestionBreakdownAccordion({ items }: QuestionBreakdownAccordionProps) {

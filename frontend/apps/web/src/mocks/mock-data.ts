@@ -225,6 +225,7 @@ export const MOCK_COMPLETE_RESPONSE: CompleteResponse = {
       is_correct: true,
       confidence_level: 4,
       explanation: 'Solving 3x + 7 = 22 gives x = 5, so 6x - 4 = 6(5) - 4 = 26.',
+      time_spent_seconds: 42,
     },
     {
       question_id: 202,
@@ -241,6 +242,7 @@ export const MOCK_COMPLETE_RESPONSE: CompleteResponse = {
       is_correct: false,
       confidence_level: 2,
       explanation: 'Parallel lines share the same slope. Since the original line has a slope of 4, the parallel line must also have a slope of 4 — only option B matches.',
+      time_spent_seconds: 78,
     },
     {
       question_id: 203,
@@ -252,6 +254,7 @@ export const MOCK_COMPLETE_RESPONSE: CompleteResponse = {
       is_correct: true,
       confidence_level: 4,
       explanation: 'f(4) = 4^2 - 3(4) + 2 = 16 - 12 + 2 = 6.',
+      time_spent_seconds: 35,
     },
   ],
 };
