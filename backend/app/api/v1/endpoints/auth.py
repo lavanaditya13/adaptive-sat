@@ -264,6 +264,7 @@ async def update_me(
 @router.post("/verify-email", response_model=AuthResponse)
 async def verify_email_endpoint(
     payload: VerifyEmailRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -278,6 +279,10 @@ async def verify_email_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
+
+    # Verification completes the onboarding flow, so establish a session just
+    # like login/OAuth before redirecting the frontend to protected routes.
+    _issue_session(response, user)
 
     return AuthResponse(
         user=AuthUserResponse(
