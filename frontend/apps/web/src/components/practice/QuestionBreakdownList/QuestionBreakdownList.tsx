@@ -6,6 +6,7 @@ import {
   AccordionContent,
 } from '@workspace/ui/components/accordion';
 import { cn } from '@workspace/ui/lib/utils';
+import { MathText } from '@/components/common/MathText/MathText';
 import { getSectionTheme } from '@/constants/section-theme';
 import type { QuestionBreakdownItem } from '@/types/api';
 import {
@@ -63,7 +64,9 @@ export function QuestionBreakdownList({ items, section }: QuestionBreakdownListP
                   <span className={cn(TRIGGER_TOPIC_STYLES, theme.text)}>
                     {item.topic_display_name}
                   </span>
-                  <p className={TRIGGER_PROMPT_STYLES}>{item.prompt}</p>
+                  <p className={TRIGGER_PROMPT_STYLES}>
+                    <MathText text={item.prompt} />
+                  </p>
                 </div>
                 <span
                   className={cn(
@@ -97,7 +100,9 @@ export function QuestionBreakdownList({ items, section }: QuestionBreakdownListP
                         )}
                       >
                         <span className={CHOICE_BADGE_STYLES}>{key}</span>
-                        <span className="flex-1">{item.choices[key]}</span>
+                        <span className="flex-1">
+                          <MathText text={item.choices[key]} />
+                        </span>
                         {isCorrectChoice && <CheckCircle2 className="size-4 shrink-0" />}
                         {isSelectedWrongChoice && <XCircle className="size-4 shrink-0" />}
                       </div>
@@ -108,7 +113,7 @@ export function QuestionBreakdownList({ items, section }: QuestionBreakdownListP
                 <div className={EXPLANATION_BOX_STYLES}>
                   <p className={EXPLANATION_TITLE_STYLES}>{EXPLANATION_TITLE}</p>
                   <p className={EXPLANATION_TEXT_STYLES}>
-                    {item.explanation ?? NO_EXPLANATION_TEXT}
+                    {item.explanation ? <MathText text={item.explanation} /> : NO_EXPLANATION_TEXT}
                   </p>
                 </div>
 

@@ -1,5 +1,6 @@
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { cn } from '@workspace/ui/lib/utils';
+import { MathText } from '@/components/common/MathText/MathText';
 import { OPTION_LABELS, type SessionAccent } from '@/components/practice/session-accent';
 import type { Question } from '@/types/api';
 import {
@@ -54,7 +55,9 @@ export function QuestionCard({
   return (
     <div>
       <span className={cn(TOPIC_LABEL_STYLES, accent.text)}>{question.topic_display_name}</span>
-      <p className={PROMPT_STYLES}>{question.prompt}</p>
+      <p className={PROMPT_STYLES}>
+        <MathText text={question.prompt} />
+      </p>
 
       <div className={OPTIONS_CONTAINER_STYLES}>
         {labels.map((label) => {
@@ -90,7 +93,7 @@ export function QuestionCard({
                 {label}
               </span>
               <span className={isSelected ? OPTION_TEXT_SELECTED_STYLES : OPTION_TEXT_STYLES}>
-                {question.choices[label]}
+                <MathText text={question.choices[label]} />
               </span>
             </button>
           );
@@ -116,7 +119,9 @@ export function QuestionCard({
           {feedback.explanation && (
             <div className={EXPLANATION_STYLES}>
               <p className={EXPLANATION_TITLE_STYLES}>{EXPLANATION_TITLE}</p>
-              <p className={EXPLANATION_BODY_STYLES}>{feedback.explanation}</p>
+              <p className={EXPLANATION_BODY_STYLES}>
+                <MathText text={feedback.explanation} />
+              </p>
             </div>
           )}
         </>

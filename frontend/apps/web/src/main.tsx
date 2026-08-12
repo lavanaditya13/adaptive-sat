@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client"
 import { BrowserRouter } from "react-router-dom"
 
 import "@workspace/ui/globals.css"
+import "katex/dist/katex.min.css"
 import { App } from "./App.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
 import { ToastProvider } from "@/components/toast/toast-provider"
