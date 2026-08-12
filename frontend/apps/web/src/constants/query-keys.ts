@@ -13,5 +13,6 @@ export const queryKeys = {
     currentSession: ['practice', 'current-session'] as const,
     question: (position: number) => ['practice', 'question', position] as const,
     skillTree: (section: string) => ['practice', 'skill-tree', section] as const,
+    latestResult: ['practice', 'latest-result'] as const,
   },
 } as const;

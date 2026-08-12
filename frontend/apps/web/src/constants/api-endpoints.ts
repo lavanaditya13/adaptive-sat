@@ -25,6 +25,11 @@ export const API = {
     QUESTION: '/api/v1/practice/question',
     NEXT: '/api/v1/practice/next',
     COMPLETE: '/api/v1/practice/complete',
+    /* Re-reads the most recently completed session's summary, in the same
+       shape COMPLETE returns. 404s when the student has never finished one.
+       Backs the Results tab on a direct visit or refresh, where the
+       client-side store COMPLETE fills is empty. */
+    LATEST_RESULT: '/api/v1/practice/results/latest',
     /* Domain -> skill accuracy tree backing the practice drill-down.
        Takes ?section=math|reading_writing; omitted falls back to the
        student's last SELECT_SECTION choice. Responds in camelCase. */

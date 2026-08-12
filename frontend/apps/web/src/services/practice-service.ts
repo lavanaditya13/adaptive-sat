@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios';
 import apiClient from './api-client';
 import { API } from '@/constants/api-endpoints';
 import { mockHandlers } from '@/mocks';
@@ -131,6 +132,30 @@ export async function completePractice(): Promise<CompleteResponse> {
 
     console.warn('API completePractice failed, returning mock fallback response:', error);
     return mockHandlers.completePractice();
+  }
+}
+
+/**
+ * The student's most recently completed session, or `null` if they have never
+ * finished one (the backend 404s that case, which is an empty Results tab, not
+ * an error worth surfacing).
+ *
+ * Deliberately has no mock fallback, unlike its neighbours: a fabricated score
+ * on the Results screen reads as a real one the student earned. Any other
+ * failure is rethrown so the page can say so. Mock-mode development is still
+ * covered — `completePractice`'s fallback populates the results store, which
+ * the page prefers over this call.
+ */
+export async function getLatestResult(): Promise<CompleteResponse | null> {
+  try {
+    const response = await apiClient.get<CompleteResponse>(API.PRACTICE.LATEST_RESULT);
+    return response.data;
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) {
+      return null;
+    }
+
+    throw error;
   }
 }
 

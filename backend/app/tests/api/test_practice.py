@@ -12,15 +12,17 @@ Idempotency-key *behavior* (replay/reject/reclaim) is exercised in
 tests/services/test_idempotency_service.py against a real DB; none of that
 is retested here.
 
-Covers only start_practice/answer_question, the two handlers this ticket
-touched. The rest of this router has no endpoint-level tests yet -- a
-pre-existing gap (see the backend-rules-2026-08 memory's "known deferred
-item" note), not something to silently extend further here.
+Covers start_practice/answer_question and latest_result. The rest of this
+router has no endpoint-level tests yet -- a pre-existing gap (see the
+backend-rules-2026-08 memory's "known deferred item" note), not something to
+silently extend further here.
 """
 
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.api.v1.endpoints import practice as practice_module
@@ -30,8 +32,10 @@ from app.core.security import get_current_user
 from app.main import app
 from app.models.user import User
 from app.schemas.practice import (
+    PracticeCompleteResponse,
     PracticeStartRequest,
     PracticeStartResponse,
+    ScoreSummary,
     SubmitAnswerRequest,
     SubmitAnswerResponse,
 )
@@ -102,7 +106,7 @@ class _StudentContext:
             return self._student
 
         async def _fake_get_db():
-            yield object()  # never touched: run_idempotent is mocked out
+            yield object()  # never touched: the service layer is mocked out
 
         app.dependency_overrides[get_current_user] = _fake_get_current_user
         app.dependency_overrides[get_db] = _fake_get_db
@@ -190,3 +194,49 @@ async def test_answer_question_without_header_over_http_defaults_to_none(monkeyp
     assert response.status_code == 200
     _, kwargs = run_idempotent_mock.call_args
     assert kwargs["idempotency_key"] is None
+
+
+# GET /practice/results/latest, over real HTTP. The service-layer behavior
+# (which session wins, per-student scoping) is covered against a real DB in
+# tests/integration/test_practice_domain_regression.py; these pin the wire
+# contract the Results tab codes against -- the path, and the 404 it renders
+# as an empty state rather than an error.
+@pytest.mark.asyncio
+async def test_latest_result_serves_the_completed_session_summary_over_http(monkeypatch):
+    student = _make_student()
+    payload = PracticeCompleteResponse(
+        status=PracticeSessionStatus.COMPLETED,
+        session_id=42,
+        completed_at=datetime(2026, 8, 11, 12, 0, tzinfo=timezone.utc),
+        score=ScoreSummary(correct=3, incorrect=1, total=4, percentage=75.0),
+        average_confidence=3.5,
+        question_breakdown=[],
+        section="math",
+        section_display_name="Math",
+    )
+    service_mock = AsyncMock(return_value=payload)
+    monkeypatch.setattr(practice_module, "get_latest_session_result", service_mock)
+
+    with _StudentContext(student) as client:
+        response = client.get("/api/v1/practice/results/latest")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["session_id"] == 42
+    assert body["completed_at"] is not None
+    assert body["score"] == {"correct": 3, "incorrect": 1, "total": 4, "percentage": 75.0}
+    assert body["section"] == "math"
+
+    _, kwargs = service_mock.call_args
+    assert kwargs["student"] is student
+
+
+@pytest.mark.asyncio
+async def test_latest_result_propagates_no_completed_session_as_404_over_http(monkeypatch):
+    service_mock = AsyncMock(side_effect=HTTPException(status_code=404, detail="none yet"))
+    monkeypatch.setattr(practice_module, "get_latest_session_result", service_mock)
+
+    with _StudentContext(_make_student()) as client:
+        response = client.get("/api/v1/practice/results/latest")
+
+    assert response.status_code == 404

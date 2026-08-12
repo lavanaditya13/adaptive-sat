@@ -46,7 +46,7 @@ function renderQuestionsPage() {
     </QueryClientProvider>
   );
 
-  return { invalidateQueriesSpy };
+  return { invalidateQueriesSpy, queryClient };
 }
 
 /** Choice text can collide with the confidence buttons' bare numerals, so
@@ -202,7 +202,7 @@ describe('QuestionsPage', () => {
     expect(screen.getByText('Question 1 of 3')).toBeInTheDocument();
   });
 
-  it('completes the session, stores the result and routes to results', async () => {
+  it('completes the session, stores and caches the result, and routes to results', async () => {
     vi.mocked(getCurrentQuestion).mockResolvedValue({
       question: MOCK_QUESTIONS[0],
       current_position: 1,
@@ -217,7 +217,7 @@ describe('QuestionsPage', () => {
     vi.mocked(completePractice).mockResolvedValue(MOCK_COMPLETE_RESPONSE);
     const user = userEvent.setup();
 
-    const { invalidateQueriesSpy } = renderQuestionsPage();
+    const { invalidateQueriesSpy, queryClient } = renderQuestionsPage();
     await waitFor(() => {
       expect(screen.getByText(MOCK_QUESTIONS[0].prompt)).toBeInTheDocument();
     });
@@ -231,6 +231,11 @@ describe('QuestionsPage', () => {
     expect(completePractice).toHaveBeenCalledTimes(1);
     expect(useResultsStore.getState().latestResult).toEqual(MOCK_COMPLETE_RESPONSE);
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.dashboard.all });
+    // The session just finished IS the latest result, so the Results tab's
+    // cache is seeded here rather than left to refetch what we already have.
+    expect(queryClient.getQueryData(queryKeys.practice.latestResult)).toEqual(
+      MOCK_COMPLETE_RESPONSE
+    );
   });
 
   it('surfaces a save failure and stays on the question', async () => {

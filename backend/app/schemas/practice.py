@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal, Optional
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
@@ -181,7 +182,15 @@ class QuestionBreakdownItem(BaseModel):
 
 
 class PracticeCompleteResponse(BaseModel):
+    """Returned both by POST /practice/complete (the session just finished) and
+    by GET /practice/results/latest (the same summary re-read later), so the
+    results screen renders one shape whether it was reached straight from a
+    session or from a cold visit to the Results tab.
+    """
+
     status: PracticeSessionStatus
+    session_id: Optional[int] = None
+    completed_at: Optional[datetime] = None
     score: ScoreSummary
     adaptive_unlock: Optional[AdaptiveUnlockResponse] = None
     average_confidence: Optional[float] = None
