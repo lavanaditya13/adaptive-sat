@@ -1,5 +1,6 @@
 import { LayoutGrid, Pause, Play } from 'lucide-react';
 import { cn } from '@workspace/ui/lib/utils';
+import { DesmosCalculator } from '@/components/practice/DesmosCalculator/DesmosCalculator';
 import { ProgressBar } from '@/components/practice/ProgressBar/ProgressBar';
 import type { SegmentState } from '@/components/practice/ProgressBar/ProgressBar.constants';
 import { formatClock, type SessionAccent } from '@/components/practice/session-accent';
@@ -98,6 +99,8 @@ export function SessionHeader({
               <Pause className="size-[13px]" aria-hidden="true" />
             )}
           </button>
+
+          <DesmosCalculator />
         </div>
       </div>
 
