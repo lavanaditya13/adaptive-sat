@@ -85,10 +85,18 @@ describe('QuestionsPage', () => {
     // than a literal 0:00 that a slow run has already ticked past.
     expect(screen.getByLabelText(SESSION_TIMER_LABEL)).toHaveTextContent(/^\d+:[0-5]\d total$/);
     expect(screen.getByLabelText(LIVE_TIMER_LABEL)).toHaveTextContent(/^\d+:[0-5]\d$/);
-    // The breadcrumb can't derive the topic from the URL, so the page sets it.
-    expect(useAppShellStore.getState().trailingCrumbLabel).toBe(
-      MOCK_QUESTIONS[0].topic_display_name
-    );
+    // The breadcrumb can't derive the topic from the URL, so the page sets
+    // it from an effect keyed on the question. That effect belongs to the
+    // same render as the prompt text above, but isn't guaranteed to have
+    // flushed at the exact instant the prior `waitFor` resolves -- assert it
+    // through its own `waitFor` rather than a synchronous read to avoid a
+    // timing-dependent flake (was previously a bare `expect`, intermittently
+    // flaky in CI).
+    await waitFor(() => {
+      expect(useAppShellStore.getState().trailingCrumbLabel).toBe(
+        MOCK_QUESTIONS[0].topic_display_name
+      );
+    });
   });
 
   it('submits the selected answer with its confidence rating and advances', async () => {
