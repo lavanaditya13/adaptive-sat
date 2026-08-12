@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -102,6 +103,28 @@ def normalize_seed_item(item: dict[str, Any]) -> dict[str, Any]:
     return item
 
 
+_LATEX_COMMAND_RE = re.compile(r"\\[a-zA-Z]+")
+_MATH_MARKUP_RE = re.compile(r"[\$\\{}^_]")
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def normalize_prompt(prompt: str) -> str:
+    """Collapses a prompt to its content-only identity, stripping $...$ /
+    LaTeX markup and normalizing whitespace/case. Two prompts differing only
+    in math notation (e.g. a plain "x^2" vs. "$x^2$") normalize to the same
+    key, so re-seeding after a pure notation/formatting fix updates the
+    existing row in place instead of matching nothing and inserting a
+    duplicate — the seed script previously matched on the raw `prompt`
+    string, which meant every notation revision (ASCII -> regex-converted
+    LaTeX -> hand-fixed LaTeX, in this project's case) silently left the
+    old rows in place and inserted a fresh copy alongside them.
+    """
+    text_value = prompt.lower()
+    text_value = _LATEX_COMMAND_RE.sub("", text_value)
+    text_value = _MATH_MARKUP_RE.sub("", text_value)
+    return _WHITESPACE_RE.sub(" ", text_value).strip()
+
+
 def validate_seed_item(item: dict[str, Any], line_number: int) -> None:
     required_fields = [
         "section",
@@ -136,10 +159,14 @@ async def seed_sat_questions(seed_file: Path, commit_every: int) -> None:
     created_topics = 0
     skipped_topics = 0
     created_questions = 0
+    updated_questions = 0
     skipped_questions = 0
     processed_lines = 0
 
     topic_cache: dict[str, Topic] = {}
+    # Per topic_id, existing questions keyed by normalize_prompt(prompt) --
+    # populated lazily (once per topic) on first use below.
+    question_cache: dict[int, dict[str, Question]] = {}
 
     async for db in get_db():
         created_sections, skipped_sections = await seed_sections(db)
@@ -186,18 +213,39 @@ async def seed_sat_questions(seed_file: Path, commit_every: int) -> None:
 
                     topic_cache[topic_code] = topic
 
-                question_result = await db.execute(
-                    select(Question)
-                    .where(
-                        Question.topic_id == topic.id,
-                        Question.prompt == item["prompt"],
+                topic_questions = question_cache.get(topic.id)
+                if topic_questions is None:
+                    existing_result = await db.execute(
+                        select(Question).where(Question.topic_id == topic.id)
                     )
-                    .limit(1)
-                )
-                existing_question = question_result.scalar_one_or_none()
+                    topic_questions = {
+                        normalize_prompt(q.prompt): q
+                        for q in existing_result.scalars().all()
+                    }
+                    question_cache[topic.id] = topic_questions
+
+                normalized_key = normalize_prompt(item["prompt"])
+                existing_question = topic_questions.get(normalized_key)
 
                 if existing_question is not None:
-                    skipped_questions += 1
+                    changed = (
+                        existing_question.prompt != item["prompt"]
+                        or existing_question.choices != item["choices"]
+                        or existing_question.correct_answer != item["correct_answer"]
+                        or existing_question.explanation != item.get("explanation")
+                        or existing_question.difficulty != item.get("difficulty", "medium")
+                        or existing_question.skill != item.get("skill")
+                    )
+                    if changed:
+                        existing_question.prompt = item["prompt"]
+                        existing_question.choices = item["choices"]
+                        existing_question.correct_answer = item["correct_answer"]
+                        existing_question.explanation = item.get("explanation")
+                        existing_question.difficulty = item.get("difficulty", "medium")
+                        existing_question.skill = item.get("skill")
+                        updated_questions += 1
+                    else:
+                        skipped_questions += 1
                     continue
 
                 question = Question(
@@ -212,6 +260,7 @@ async def seed_sat_questions(seed_file: Path, commit_every: int) -> None:
                 )
 
                 db.add(question)
+                topic_questions[normalized_key] = question
                 created_questions += 1
 
                 if created_questions > 0 and created_questions % commit_every == 0:
@@ -229,7 +278,8 @@ async def seed_sat_questions(seed_file: Path, commit_every: int) -> None:
     print(f"Topics created: {created_topics}")
     print(f"Topics skipped: {skipped_topics}")
     print(f"Questions created: {created_questions}")
-    print(f"Questions skipped: {skipped_questions}")
+    print(f"Questions updated: {updated_questions}")
+    print(f"Questions skipped (unchanged): {skipped_questions}")
 
 
 if __name__ == "__main__":

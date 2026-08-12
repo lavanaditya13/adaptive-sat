@@ -10,11 +10,14 @@ name: Seed Database
 #
 # Both Vercel projects (adaptive-sat and adaptive-sat-backend) also happen
 # to deploy on every push, so nothing here needs to coordinate with them:
-# migrations no-op once applied, and seed_sat_questions.py only inserts
-# rows it hasn't already inserted (keyed on Topic.code and
-# (topic_id, prompt)) — a second run just reports everything skipped. The
-# concurrency group still serializes same-branch runs so two pushes
-# landing seconds apart can't race each other against the same database.
+# migrations no-op once applied, and seed_sat_questions.py upserts rows
+# keyed on Topic.code and (topic_id, normalize_prompt(prompt)) -- matching
+# on a markup-stripped prompt (not the raw string) so a notation-only edit
+# to the seed data (e.g. wrapping existing text in LaTeX) updates the
+# existing row instead of inserting a duplicate alongside it. A second run
+# with no content changes just reports everything skipped. The concurrency
+# group still serializes same-branch runs so two pushes landing seconds
+# apart can't race each other against the same database.
 on:
   push:
     branches: [develop, main]
