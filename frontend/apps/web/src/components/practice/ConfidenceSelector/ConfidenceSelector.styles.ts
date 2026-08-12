@@ -1,8 +1,12 @@
-export const CARD_STYLES = 'p-4 shadow-sm space-y-3';
-export const TITLE_STYLES = 'text-xs font-semibold uppercase tracking-wide text-muted-foreground';
-export const BUTTONS_GRID_STYLES = 'grid grid-cols-5 gap-2';
+export const CARD_STYLES =
+  'mb-[26px] rounded-2xl border border-white/[0.07] bg-surface-card p-[18px]';
+export const TITLE_STYLES =
+  'm-0 mb-3.5 text-[11px] font-semibold tracking-[0.06em] text-ink-muted uppercase';
+export const LEVELS_ROW_STYLES = 'flex gap-2';
+export const LEVEL_BUTTON_STYLES =
+  'flex-1 rounded-lg py-[11px] font-mono text-[13px] font-bold transition-colors disabled:cursor-default disabled:opacity-60';
 export const LEVEL_BUTTON_UNSELECTED_STYLES =
-  'h-10 text-sm font-semibold rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground';
-export const LEVEL_BUTTON_SELECTED_STYLES =
-  'h-10 text-sm font-semibold rounded-md border border-primary bg-primary text-primary-foreground shadow';
-export const CAPTIONS_ROW_STYLES = 'flex items-center justify-between text-xs text-muted-foreground';
+  'cursor-pointer bg-white/[0.05] text-ink-muted hover:bg-white/[0.08]';
+export const LEVEL_BUTTON_SELECTED_STYLES = 'cursor-pointer text-white';
+export const CAPTIONS_ROW_STYLES = 'mt-2 flex justify-between';
+export const CAPTION_STYLES = 'm-0 text-[11px] text-ink-muted';

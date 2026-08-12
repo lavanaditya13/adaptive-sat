@@ -52,6 +52,16 @@ class Question(Base):
         server_default="medium",
     )
 
+    # Fine-grained skill within a topic (e.g. "Words in Context" under the
+    # broader "Craft and Structure" topic). Deliberately not used to drive
+    # any UI or query yet — Practice by Topic still lists topics only — this
+    # just carries the finer-grained tag through so it's there when/if a
+    # skill-level view gets built, instead of having to backfill it later.
+    skill: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
     topic_id: Mapped[int] = mapped_column(
         ForeignKey("topics.id", ondelete="CASCADE"),
         nullable=False,

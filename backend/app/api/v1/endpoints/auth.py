@@ -40,8 +40,10 @@ from app.schemas.auth import (
     ResendVerificationByEmailRequest,
     ResetPasswordRequest,
     SignupRequest,
+    UpdateProfileRequest,
     VerifyEmailRequest,
 )
+from app.services.user_service import update_user_profile
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -220,17 +222,43 @@ async def login(
     return _issue_session(response, user)
 
 
+def _auth_user_response(user: User) -> AuthUserResponse:
+    return AuthUserResponse(
+        user_id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+        email_verified=user.email_verified,
+        oauth_provider=user.oauth_provider,
+    )
+
+
 @router.get("/me", response_model=AuthUserResponse)
 async def me(current_user: User = Depends(get_current_user)):
     """Return the current session's user, used by the frontend to check auth on load."""
-    return AuthUserResponse(
-        user_id=current_user.id,
-        email=current_user.email,
-        full_name=current_user.full_name,
-        role=current_user.role,
-        email_verified=current_user.email_verified,
-        oauth_provider=current_user.oauth_provider,
+    return _auth_user_response(current_user)
+
+
+@router.patch("/me", response_model=AuthUserResponse)
+async def update_me(
+    payload: UpdateProfileRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update the session user's display name.
+
+    Lives on /auth/me rather than /settings/profile so it is the write
+    counterpart of GET /auth/me: same resource, same AuthUserResponse shape, so
+    the client reuses one type and one query key. The /settings router is
+    scoped to OAuth provider linking, not the user record itself.
+    """
+    updated_user = await update_user_profile(
+        db,
+        user=current_user,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
     )
+    return _auth_user_response(updated_user)
 
 
 @router.post("/verify-email", response_model=AuthResponse)

@@ -1,0 +1,87 @@
+name: Expire Practice Sessions
+
+# Reaper for the "student never comes back" gap called out in the ticket:
+# practice_service.start_practice_session already auto-abandons a stale
+# session, but only when its own student starts a new one -- a session
+# whose owner never returns just sits in_progress forever otherwise. This
+# runs on a schedule instead, independent of any student request, and
+# sweeps every student's stale sessions in one pass (see
+# scripts/expire_stale_practice_sessions.py).
+#
+# Hourly is plenty granular against the 24h TTL (PRACTICE_SESSION_EXPIRE_HOURS)
+# -- also runnable on demand via workflow_dispatch. No production approval
+# gate here (unlike seed-database.yml's seed-production job): the whole
+# point is that this runs unattended, and it's non-destructive/idempotent --
+# a session already outside the active statuses is left alone, so an extra
+# run just expires nothing new.
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  expire-preview:
+    name: Expire Preview DB (develop)
+    runs-on: ubuntu-latest
+    concurrency:
+      group: expire-sessions-preview
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Symlink pyproject.toml / poetry.lock
+        run: |
+          ln -sf poetry-project.toml pyproject.toml
+          ln -sf poetry-project.lock poetry.lock
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --only main
+
+      - name: Expire stale practice sessions
+        run: poetry run python scripts/expire_stale_practice_sessions.py
+        env:
+          DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+
+  expire-production:
+    name: Expire Production DB (main)
+    runs-on: ubuntu-latest
+    concurrency:
+      group: expire-sessions-production
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Symlink pyproject.toml / poetry.lock
+        run: |
+          ln -sf poetry-project.toml pyproject.toml
+          ln -sf poetry-project.lock poetry.lock
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --only main
+
+      - name: Expire stale practice sessions
+        run: poetry run python scripts/expire_stale_practice_sessions.py
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}

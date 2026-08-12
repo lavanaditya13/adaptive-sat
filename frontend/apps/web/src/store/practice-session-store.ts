@@ -1,10 +1,12 @@
 import { create } from 'zustand';
-import type { NavigationResponse, Question, SessionQuestionState } from '@/types/api';
+import type { Question } from '@/types/api';
 
-interface RestoredAnswer {
-  isAnswered: boolean;
+interface AnsweredQuestion {
+  position: number;
+  question: Question;
   selectedAnswer: string | null;
-  confidenceLevel: number | null;
+  confidenceLevel: number;
+  attemptId: number;
 }
 
 interface PracticeSessionState {
@@ -14,74 +16,67 @@ interface PracticeSessionState {
   confidenceLevel: number;
   selectedAnswer: string | null;
   timeSpentSeconds: number;
+  answeredHistory: AnsweredQuestion[];
+  reviewIndex: number | null;
 
-  // Server-owned map of which positions are answered. This replaces the old
-  // client-only `answeredHistory`, which could not survive a reload and only
-  // ever grew forwards, so it could not describe a skipped question.
-  questionStates: SessionQuestionState[];
-  answeredCount: number;
-  remainingCount: number;
-  nextUnansweredPosition: number | null;
-  // Whether the position currently on screen has already been answered.
-  isCurrentAnswered: boolean;
-
-  setSessionData: (
-    question: Question,
-    position: number,
-    total: number,
-    restored?: RestoredAnswer
-  ) => void;
-  setNavigation: (navigation: NavigationResponse) => void;
+  setSessionData: (question: Question, position: number, total: number) => void;
   setSelectedAnswer: (answer: string | null) => void;
   setConfidenceLevel: (level: number) => void;
   setTimeSpentSeconds: (seconds: number) => void;
+  pushAnsweredQuestion: (entry: AnsweredQuestion) => void;
+  updateAnsweredQuestion: (position: number, newAnswer: string | null) => void;
+  setReviewIndex: (index: number | null) => void;
   resetSession: () => void;
 }
 
-const DEFAULT_CONFIDENCE = 3;
-
-const initialState = {
+export const usePracticeSessionStore = create<PracticeSessionState>((set) => ({
   currentQuestion: null,
   currentPosition: 0,
   totalQuestions: 0,
-  confidenceLevel: DEFAULT_CONFIDENCE,
+  confidenceLevel: 3,
   selectedAnswer: null,
   timeSpentSeconds: 0,
-  questionStates: [],
-  answeredCount: 0,
-  remainingCount: 0,
-  nextUnansweredPosition: null,
-  isCurrentAnswered: false,
-};
+  answeredHistory: [],
+  reviewIndex: null,
 
-export const usePracticeSessionStore = create<PracticeSessionState>((set) => ({
-  ...initialState,
-
-  setSessionData: (question, position, total, restored) =>
+  setSessionData: (question, position, total) =>
     set({
       currentQuestion: question,
       currentPosition: position,
       totalQuestions: total,
+      selectedAnswer: null,
+      confidenceLevel: 3,
       timeSpentSeconds: 0,
-      // Landing on an already-answered position re-hydrates the student's
-      // previous choice so they can see and revise it, rather than a blank form.
-      selectedAnswer: restored?.selectedAnswer ?? null,
-      confidenceLevel: restored?.confidenceLevel ?? DEFAULT_CONFIDENCE,
-      isCurrentAnswered: restored?.isAnswered ?? false,
-    }),
-
-  setNavigation: (navigation) =>
-    set({
-      questionStates: navigation.questions,
-      answeredCount: navigation.answered_count,
-      remainingCount: navigation.remaining_count,
-      nextUnansweredPosition: navigation.next_unanswered_position,
-      totalQuestions: navigation.total_questions,
+      reviewIndex: null,
     }),
 
   setSelectedAnswer: (selectedAnswer) => set({ selectedAnswer }),
   setConfidenceLevel: (confidenceLevel) => set({ confidenceLevel }),
   setTimeSpentSeconds: (timeSpentSeconds) => set({ timeSpentSeconds }),
 
-  resetSession: () => set({ ...initialState }),
+  pushAnsweredQuestion: (entry) =>
+    set((state) => ({ answeredHistory: [...state.answeredHistory, entry] })),
+
+  updateAnsweredQuestion: (position, newAnswer) =>
+    set((state) => ({
+      answeredHistory: state.answeredHistory.map((entry) =>
+        entry.position === position ? { ...entry, selectedAnswer: newAnswer } : entry
+      ),
+    })),
+
+  setReviewIndex: (reviewIndex) => set({ reviewIndex }),
+
+  resetSession: () =>
+    set({
+      currentQuestion: null,
+      currentPosition: 0,
+      totalQuestions: 0,
+      confidenceLevel: 3,
+      selectedAnswer: null,
+      timeSpentSeconds: 0,
+      answeredHistory: [],
+      reviewIndex: null,
+    }),
 }));
+
+export type { AnsweredQuestion };

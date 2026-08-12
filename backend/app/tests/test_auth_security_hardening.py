@@ -196,8 +196,13 @@ def test_production_accepts_strong_secret_key():
     assert settings.SECRET_KEY == strong_key
 
 
-def test_development_still_boots_with_the_default_secret_key():
-    """Local dev and the test suite rely on the checked-in default."""
+def test_development_still_boots_with_the_default_secret_key(monkeypatch):
+    """Local dev relies on the checked-in default when nothing overrides it.
+
+    conftest.py sets a SECRET_KEY env var for the whole suite so other tests
+    don't depend on it; unset it here to exercise the actual class default.
+    """
+    monkeypatch.delenv("SECRET_KEY", raising=False)
     settings = _build_settings(ENVIRONMENT="development")
 
     assert settings.SECRET_KEY == "change-this-secret-key"

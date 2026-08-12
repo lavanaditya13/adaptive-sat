@@ -15,7 +15,7 @@ const MATH_SECTION = {
 
 describe('SectionCard', () => {
   it('renders the section name, description, and its three stats', () => {
-    render(<SectionCard section={MATH_SECTION} onOpen={vi.fn()} />);
+    render(<SectionCard section={MATH_SECTION} onSelect={vi.fn()} />);
 
     expect(screen.getByText('Math')).toBeInTheDocument();
     expect(screen.getByText(SECTION_DESCRIPTIONS.math)).toBeInTheDocument();
@@ -28,20 +28,20 @@ describe('SectionCard', () => {
     render(
       <SectionCard
         section={{ ...MATH_SECTION, name: 'unknown_section', display_name: 'Unknown Section' }}
-        onOpen={vi.fn()}
+        onSelect={vi.fn()}
       />
     );
 
     expect(screen.getAllByText('Unknown Section').length).toBeGreaterThan(0);
   });
 
-  it('calls onOpen with the section when the card is clicked', async () => {
-    const onOpen = vi.fn();
+  it('calls onSelect with the section when the card is clicked', async () => {
+    const onSelect = vi.fn();
     const user = userEvent.setup();
-    render(<SectionCard section={MATH_SECTION} onOpen={onOpen} />);
+    render(<SectionCard section={MATH_SECTION} onSelect={onSelect} />);
 
     await user.click(screen.getByText('Math'));
 
-    expect(onOpen).toHaveBeenCalledWith(MATH_SECTION);
+    expect(onSelect).toHaveBeenCalledWith(MATH_SECTION);
   });
 });

@@ -1,19 +1,31 @@
-export const CONTAINER_STYLES = 'max-w-5xl mx-auto p-6 space-y-8';
-export const HEADER_ROW_STYLES = 'flex items-start justify-between gap-4';
-export const HEADER_ACTIONS_STYLES = 'flex items-center gap-1';
-export const LOGOUT_BUTTON_STYLES = 'text-muted-foreground hover:text-foreground';
-export const SETTINGS_BUTTON_STYLES = 'text-muted-foreground hover:text-foreground';
-export const GREETING_EYEBROW_STYLES = 'text-sm text-muted-foreground';
-export const GREETING_STYLES = 'font-heading text-3xl font-bold tracking-tight';
-export const STATS_GRID_STYLES = 'grid grid-cols-2 lg:grid-cols-4 gap-4';
-export const SECTIONS_GRID_STYLES = 'grid grid-cols-1 md:grid-cols-2 gap-4';
-export const SECTIONS_BLOCK_STYLES = 'space-y-4';
-export const SECTION_TITLE_STYLES = 'text-xl font-semibold tracking-tight';
-export const ERROR_CONTAINER_STYLES = 'flex min-h-screen items-center justify-center px-6 text-center';
-export const ERROR_MESSAGE_STYLES = 'max-w-xl text-balance text-lg font-medium text-foreground';
-export const SKELETON_GREETING_STYLES = 'h-8 w-64 mb-6';
-export const SKELETON_STAT_STYLES = 'h-24';
-export const SKELETON_SCORE_STYLES = 'h-32';
-export const SKELETON_WEAK_TOPICS_STYLES = 'h-48';
-export const SKELETON_SECTION_TITLE_STYLES = 'h-7 w-32 mb-4';
-export const SKELETON_SECTION_CARD_STYLES = 'h-32';
+/* Design container: max-width 900px, padding 32px 24px 40px. The app shell
+   supplies the sidebar, header and breadcrumbs around this. */
+export const CONTAINER_STYLES = 'mx-auto max-w-[900px] px-6 pt-8 pb-10';
+
+export const BANNER_WRAPPER_STYLES = 'mb-6';
+export const GREETING_BLOCK_STYLES = 'mb-7';
+export const GREETING_EYEBROW_STYLES = 'm-0 mb-1 text-[13px] text-ink-muted';
+export const GREETING_STYLES = 'm-0 text-[28px] font-extrabold leading-tight text-ink';
+
+/* Single column below the 900px mobile breakpoint. */
+export const STATS_GRID_STYLES = 'mb-7 grid grid-cols-2 gap-3.5 max-[900px]:grid-cols-1';
+export const SCORE_BLOCK_STYLES = 'mb-9';
+export const SECTION_LABEL_STYLES =
+  'm-0 mb-3.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted';
+export const SECTIONS_GRID_STYLES =
+  'grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-3.5';
+
+export const EMPTY_PANEL_STYLES =
+  'rounded-2xl border border-white/[0.07] bg-surface-card p-6 text-center';
+export const EMPTY_TITLE_STYLES = 'm-0 mb-1.5 text-[15px] font-bold text-ink';
+export const EMPTY_MESSAGE_STYLES = 'm-0 text-[13px] text-ink-muted';
+
+export const ERROR_PANEL_STYLES =
+  'rounded-2xl border border-danger/30 bg-surface-card p-6 text-center';
+export const ERROR_MESSAGE_STYLES = 'm-0 mb-4 text-[13px] text-ink-secondary';
+
+export const SKELETON_GREETING_STYLES = 'mb-7 h-[52px] w-64';
+export const SKELETON_STAT_STYLES = 'h-[116px] rounded-2xl';
+export const SKELETON_SCORE_STYLES = 'mb-9 h-[136px] rounded-2xl';
+export const SKELETON_SECTION_LABEL_STYLES = 'mb-3.5 h-4 w-36';
+export const SKELETON_SECTION_CARD_STYLES = 'h-[220px] rounded-2xl';

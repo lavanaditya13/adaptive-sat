@@ -16,6 +16,7 @@ import type {
   SectionContextResponse,
   StartPracticeResponse,
   AnswerResponse,
+  AbandonResponse,
   QuestionResponse,
   CompleteResponse,
 } from '@/types/api';
@@ -41,8 +42,13 @@ export const mockHandlers = {
     };
   },
 
+  abandonPractice: async (): Promise<AbandonResponse> => {
+    activeQuestionIndex = 0;
+    return { status: 'abandoned' };
+  },
+
   submitAnswer: async (
-    _selectedAnswer: string,
+    _selectedAnswer: string | null,
     _timeSpentSeconds: number,
     _confidenceLevel: number
   ): Promise<AnswerResponse> => {
@@ -53,6 +59,7 @@ export const mockHandlers = {
       saved: true,
       answered_position: answeredPos,
       remaining_questions: remaining,
+      attempt_id: answeredPos,
     };
   },
 

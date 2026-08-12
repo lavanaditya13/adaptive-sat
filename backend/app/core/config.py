@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from urllib.parse import (
     parse_qsl,
     quote_plus,
@@ -15,6 +16,9 @@ from pydantic import (
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+BACKEND_ENV_FILE = BACKEND_ROOT / ".env"
 
 # Minimum entropy we require of a production signing key.
 SECRET_KEY_MIN_LENGTH = 32
@@ -33,8 +37,9 @@ PLACEHOLDER_SECRET_KEYS = frozenset(
 
 
 class Settings(BaseSettings):
+
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(BACKEND_ENV_FILE),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
@@ -56,12 +61,51 @@ class Settings(BaseSettings):
 
     # Practice settings
     DEFAULT_PRACTICE_QUESTION_COUNT: int = 25
+    # A session with no attempts and no activity for this long is treated as
+    # abandoned and auto-superseded the next time the student starts practice,
+    # instead of permanently blocking them with a 409.
+    PRACTICE_SESSION_STALE_MINUTES: int = 180
+
+    # Final sweep for sessions whose student never comes back at all, so
+    # PRACTICE_SESSION_STALE_MINUTES above never gets a chance to fire (that
+    # check only runs when *that* student starts a new session). Applied by
+    # expire_stale_practice_sessions in practice_service.py, invoked on a
+    # schedule via scripts/expire_stale_practice_sessions.py -- not tied to
+    # any request path, so a session left in_progress/ready_to_complete this
+    # long gets marked expired regardless of whether anyone ever asks again.
+    # Deliberately much longer than PRACTICE_SESSION_STALE_MINUTES: this is
+    # the no-second-chances backstop, not the same-student handoff.
+    PRACTICE_SESSION_EXPIRE_HOURS: int = 24
+
+    # An Idempotency-Key reservation stuck "in_progress" for longer than this
+    # (see app/services/idempotency_service.py) is treated as abandoned --
+    # the request that created it was presumably killed mid-flight (per
+    # database.py's NullPool comment on Vercel/Neon) rather than ever
+    # finishing -- so a retry with the same key can reclaim it and actually
+    # run, instead of getting stuck behind a 409 forever. Short window:
+    # recovering from one killed request, not tracking a long-lived session
+    # like PRACTICE_SESSION_STALE_MINUTES above.
+    IDEMPOTENCY_KEY_STALE_MINUTES: int = 5
 
     # Security
     SECRET_KEY: str = "change-this-secret-key"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
-    RESEND_API_KEY: str = ""
-    RESEND_FROM_EMAIL: str = "Adaptive SAT <onboarding@resend.dev>"
+    RESEND_API_KEY: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "RESEND_API_KEY",
+            "added_RESEND_API_KEY",
+            "ADDED_RESEND_API_KEY",
+        ),
+    )
+    RESEND_FROM_EMAIL: str = Field(
+        default="Adaptive SAT <onboarding@resend.dev>",
+        validation_alias=AliasChoices(
+            "RESEND_FROM_EMAIL",
+            "added_RESEND_FROM_EMAIL",
+            "ADDED_RESEND_FROM_EMAIL",
+        ),
+    )
     # Stable production domain — used whenever an environment doesn't set
     # these explicitly (e.g. Production itself, so it doesn't need its own
     # copies of vars that never change). Preview environments and local dev

@@ -35,3 +35,36 @@ const SECTION_THEMES: Record<SectionName, SectionTheme> = {
 export function getSectionTheme(sectionName: string): SectionTheme {
   return SECTION_THEMES[sectionName as SectionName] ?? DEFAULT_THEME;
 }
+
+const SECTION_DISPLAY_NAMES: Record<string, string> = {
+  math: 'Math',
+  reading_writing: 'Reading & Writing',
+};
+
+export function getSectionDisplayName(sectionName: string | undefined): string {
+  if (!sectionName) {
+    return '';
+  }
+
+  return SECTION_DISPLAY_NAMES[sectionName] ?? sectionName;
+}
+
+/* Mirrors SECTION_CODES in backend/app/services/practice_service.py. The practice
+   routes carry the section *name* (`/practice/math`), but POST /practice/context/section
+   takes the numeric id, so a URL-driven page has no other way to register its section. */
+const SECTION_IDS: Record<SectionName, number> = {
+  math: 1,
+  reading_writing: 2,
+};
+
+export function getSectionId(sectionName: string | undefined): number | null {
+  if (!sectionName) {
+    return null;
+  }
+
+  return SECTION_IDS[sectionName as SectionName] ?? null;
+}
+
+export function isSectionName(value: string | undefined): value is SectionName {
+  return value === 'math' || value === 'reading_writing';
+}
