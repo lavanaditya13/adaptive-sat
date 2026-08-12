@@ -23,7 +23,7 @@ export function MathText({ text }: MathTextProps) {
     <>
       {segments.map((segment, index) =>
         index % 2 === 1 ? (
-          <InlineMath key={index} math={segment} settings={{ throwOnError: false }} />
+          <InlineMath key={index} math={segment} />
         ) : (
           <Fragment key={index}>
             {segment.replace(ESCAPED_DOLLAR_PLACEHOLDER_REGEX, '$')}
