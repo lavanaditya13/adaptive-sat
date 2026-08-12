@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SessionHeader } from './SessionHeader';
 import { getSessionAccent } from '@/components/practice/session-accent';
+import type { SegmentState } from '@/components/practice/ProgressBar/ProgressBar.constants';
 
 vi.mock('@/utils/load-desmos-script', () => ({
   loadDesmosScript: vi.fn(),
@@ -14,7 +15,7 @@ const baseProps = {
   totalQuestions: 10,
   questionSeconds: 12,
   sessionSeconds: 120,
-  segments: [] as const,
+  segments: [] as SegmentState[],
   isPaused: false,
   onOpenNav: vi.fn(),
   onTogglePause: vi.fn(),
