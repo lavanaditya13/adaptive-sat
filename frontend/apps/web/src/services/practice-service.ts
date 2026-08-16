@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios';
 import apiClient from './api-client';
 import { API } from '@/constants/api-endpoints';
 import { mockHandlers } from '@/mocks';
@@ -9,6 +10,7 @@ import type {
   AbandonResponse,
   QuestionResponse,
   CompleteResponse,
+  UpdateAttemptResponse,
 } from '@/types/api';
 
 export interface StartPracticePayload {
@@ -67,8 +69,18 @@ export async function abandonPractice(): Promise<AbandonResponse> {
   }
 }
 
+/**
+ * `selectedAnswer: null` records a deliberate skip — the backend stores an
+ * attempt with no choice and advances the session, which is the only way to
+ * move past a question without answering it.
+ *
+ * `confidence` is the canonical field name in the OpenAPI schema;
+ * `confidence_level` is its alias and is sent alongside so the payload is
+ * accepted by both the aliased and the pre-alias backend. Both must be 1–5 —
+ * a CHECK constraint rejects 0 and 6.
+ */
 export async function submitAnswer(
-  selectedAnswer: string,
+  selectedAnswer: string | null,
   timeSpentSeconds: number,
   confidenceLevel: number
 ): Promise<AnswerResponse> {
@@ -76,6 +88,7 @@ export async function submitAnswer(
     const response = await apiClient.post<AnswerResponse>(API.PRACTICE.ANSWER, {
       selected_answer: selectedAnswer,
       time_spent_seconds: timeSpentSeconds,
+      confidence: confidenceLevel,
       confidence_level: confidenceLevel,
     });
     return response.data;
@@ -85,12 +98,15 @@ export async function submitAnswer(
     }
 
     console.warn('API submitAnswer failed, returning mock fallback response:', error);
-    return mockHandlers.submitAnswer(selectedAnswer, timeSpentSeconds, confidenceLevel);
+    return mockHandlers.submitAnswer(selectedAnswer ?? '', timeSpentSeconds, confidenceLevel);
   }
 }
 
-// ASSUMPTION (not confirmed by backend): no param returns the active session's current question.
-// Comment this clearly — if wrong, this is the first thing to fix.
+/* Returns the session's next `ASSIGNED` question. The endpoint also takes a
+   `questionId` query param — a 1-based position within the session, not a Question
+   primary key — but it 400s on any position already answered and 404s on one that
+   doesn't exist, so it cannot re-serve past questions. Review is therefore backed by
+   the client-side cache in `use-question-session`, and this call takes no argument. */
 export async function getCurrentQuestion(): Promise<QuestionResponse> {
   try {
     const response = await apiClient.get<QuestionResponse>(API.PRACTICE.QUESTION);
@@ -117,4 +133,39 @@ export async function completePractice(): Promise<CompleteResponse> {
     console.warn('API completePractice failed, returning mock fallback response:', error);
     return mockHandlers.completePractice();
   }
+}
+
+/**
+ * The student's most recently completed session, or `null` if they have never
+ * finished one (the backend 404s that case, which is an empty Results tab, not
+ * an error worth surfacing).
+ *
+ * Deliberately has no mock fallback, unlike its neighbours: a fabricated score
+ * on the Results screen reads as a real one the student earned. Any other
+ * failure is rethrown so the page can say so. Mock-mode development is still
+ * covered — `completePractice`'s fallback populates the results store, which
+ * the page prefers over this call.
+ */
+export async function getLatestResult(): Promise<CompleteResponse | null> {
+  try {
+    const response = await apiClient.get<CompleteResponse>(API.PRACTICE.LATEST_RESULT);
+    return response.data;
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+export async function updateAttempt(
+  attemptId: number,
+  selectedAnswer: string | null
+): Promise<UpdateAttemptResponse> {
+  const response = await apiClient.put<UpdateAttemptResponse>(
+    API.PRACTICE.ATTEMPT_UPDATE(attemptId),
+    { selected_answer: selectedAnswer }
+  );
+  return response.data;
 }

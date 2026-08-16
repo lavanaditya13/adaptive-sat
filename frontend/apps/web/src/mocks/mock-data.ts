@@ -37,9 +37,39 @@ export const MOCK_DASHBOARD: DashboardResponse = {
     day_streak: 14,
   },
   weak_topics: [
-    { topic_id: 1, display_name: 'Linear Equations in Two Variables', mastery_score: 45 },
-    { topic_id: 2, display_name: 'Problem Solving and Data Analysis', mastery_score: 52 },
-    { topic_id: 3, display_name: 'Expression Simplification & Factoring', mastery_score: 60 },
+    {
+      topic_id: 14,
+      display_name: 'Algebra',
+      mastery_score: 45,
+      questions_attempted: 20,
+      questions_correct: 9,
+      section: 'math',
+      section_id: 1,
+      section_display_name: 'Math',
+      practice_topic_id: 1,
+    },
+    {
+      topic_id: 21,
+      display_name: 'Problem-Solving and Data Analysis',
+      mastery_score: 52,
+      questions_attempted: 25,
+      questions_correct: 13,
+      section: 'math',
+      section_id: 1,
+      section_display_name: 'Math',
+      practice_topic_id: 4,
+    },
+    {
+      topic_id: 33,
+      display_name: 'Craft and Structure',
+      mastery_score: 60,
+      questions_attempted: 15,
+      questions_correct: 9,
+      section: 'reading_writing',
+      section_id: 2,
+      section_display_name: 'Reading & Writing',
+      practice_topic_id: 2,
+    },
   ],
   sections: [
     {
@@ -158,6 +188,7 @@ export const MOCK_ANSWER_RESPONSE: AnswerResponse = {
   saved: true,
   answered_position: 1,
   remaining_questions: 2,
+  attempt_id: 1,
 };
 
 export const MOCK_QUESTION_RESPONSE: QuestionResponse = {
@@ -194,6 +225,7 @@ export const MOCK_COMPLETE_RESPONSE: CompleteResponse = {
       is_correct: true,
       confidence_level: 4,
       explanation: 'Solving 3x + 7 = 22 gives x = 5, so 6x - 4 = 6(5) - 4 = 26.',
+      time_spent_seconds: 42,
     },
     {
       question_id: 202,
@@ -210,6 +242,7 @@ export const MOCK_COMPLETE_RESPONSE: CompleteResponse = {
       is_correct: false,
       confidence_level: 2,
       explanation: 'Parallel lines share the same slope. Since the original line has a slope of 4, the parallel line must also have a slope of 4 — only option B matches.',
+      time_spent_seconds: 78,
     },
     {
       question_id: 203,
@@ -221,6 +254,7 @@ export const MOCK_COMPLETE_RESPONSE: CompleteResponse = {
       is_correct: true,
       confidence_level: 4,
       explanation: 'f(4) = 4^2 - 3(4) + 2 = 16 - 12 + 2 = 6.',
+      time_spent_seconds: 35,
     },
   ],
 };

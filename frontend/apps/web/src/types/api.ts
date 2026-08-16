@@ -25,6 +25,31 @@ interface EstimatedScore {
   percent_to_goal: number;
 }
 
+/**
+ * A topic the student is weakest at, as reported by the dashboard.
+ *
+ * Two ids, deliberately: `topic_id` is the database primary key (stable React
+ * key), while `practice_topic_id` is the section-scoped position that
+ * POST /practice/start accepts as its `topic_id`. Starting a session needs the
+ * latter *and* `section_id`, since the backend resolves the position within
+ * whichever section the student currently has selected.
+ *
+ * The four deep-link fields are null only for a topic with no practisable
+ * questions — render the row, just without a start action.
+ */
+interface WeakTopic {
+  topic_id: number;
+  display_name: string;
+  /** Accuracy over this topic, 0-100. */
+  mastery_score: number;
+  questions_attempted: number;
+  questions_correct: number;
+  section: 'math' | 'reading_writing' | null;
+  section_id: number | null;
+  section_display_name: string | null;
+  practice_topic_id: number | null;
+}
+
 interface DashboardResponse {
   student: { full_name: string };
   progress: {
@@ -36,11 +61,7 @@ interface DashboardResponse {
     avg_session_minutes: number;
     day_streak: number;
   };
-  weak_topics: Array<{
-    topic_id: number;
-    display_name: string;
-    mastery_score: number;
-  }>;
+  weak_topics: WeakTopic[];
   sections: Array<{
     section_id: number;
     name: string;
@@ -93,6 +114,12 @@ interface AnswerResponse {
   saved: boolean;
   answered_position: number;
   remaining_questions: number;
+  attempt_id: number;
+}
+
+interface UpdateAttemptResponse {
+  saved: boolean;
+  attempt_id: number;
 }
 
 interface AbandonResponse {
@@ -115,10 +142,15 @@ interface QuestionBreakdownItem {
   is_correct: boolean;
   confidence_level: number | null;
   explanation: string | null;
+  time_spent_seconds: number | null;
 }
 
 interface CompleteResponse {
   status: 'completed';
+  /* Present on every response from a backend that has the results endpoints;
+     optional so a summary cached by an older build still type-checks. */
+  session_id?: number | null;
+  completed_at?: string | null;
   score: {
     correct: number;
     incorrect: number;
@@ -142,11 +174,41 @@ interface ApiErrorResponse {
   [key: string]: unknown;
 }
 
+/* Domain -> skill accuracy tree backing the practice drill-down
+   (GET /api/v1/practice/skill-tree?section=...). Responds in camelCase. */
+interface SkillTreeSkill {
+  name: string;
+  accuracy: number;
+  questionsAttempted: number;
+  questionsCorrect: number;
+  mastered: boolean;
+}
+
+interface SkillTreeDomain {
+  name: string;
+  /** 1-based position within the section; what POST /practice/start expects as topic_id. */
+  topicId: number;
+  topicCode: string;
+  accuracy: number;
+  questionsAttempted: number;
+  questionsCorrect: number;
+  mastered: boolean;
+  skills: SkillTreeSkill[];
+}
+
+interface SkillTreeResponse {
+  section: 'math' | 'reading_writing';
+  sectionDisplayName: string;
+  masteryRule: { accuracy: number; minQuestions: number };
+  domains: SkillTreeDomain[];
+}
+
 export type {
   User,
   ConnectedProvider,
   ConnectedProvidersResponse,
   EstimatedScore,
+  WeakTopic,
   DashboardResponse,
   PracticeOption,
   SectionContextResponse,
@@ -157,5 +219,9 @@ export type {
   QuestionResponse,
   QuestionBreakdownItem,
   CompleteResponse,
+  UpdateAttemptResponse,
   ApiErrorResponse,
+  SkillTreeSkill,
+  SkillTreeDomain,
+  SkillTreeResponse,
 };

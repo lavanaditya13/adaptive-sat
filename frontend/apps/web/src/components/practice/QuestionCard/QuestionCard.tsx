@@ -1,63 +1,131 @@
-import { Card } from '@workspace/ui/components/card';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import { cn } from '@workspace/ui/lib/utils';
-import { getSectionTheme } from '@/constants/section-theme';
+import { MathText } from '@/components/common/MathText/MathText';
+import { OPTION_LABELS, type SessionAccent } from '@/components/practice/session-accent';
 import type { Question } from '@/types/api';
 import {
-  CARD_STYLES,
-  TOPIC_LABEL_STYLES,
+  CORRECT_LABEL,
+  EXPLANATION_TITLE,
+  INCORRECT_LABEL,
+  type QuestionFeedback,
+} from './QuestionCard.constants';
+import {
+  EXPLANATION_BODY_STYLES,
+  EXPLANATION_STYLES,
+  EXPLANATION_TITLE_STYLES,
+  OPTION_BADGE_CORRECT_STYLES,
+  OPTION_BADGE_STYLES,
+  OPTION_BADGE_UNSELECTED_STYLES,
+  OPTION_BADGE_WRONG_STYLES,
+  OPTION_CORRECT_STYLES,
+  OPTION_STYLES,
+  OPTION_TEXT_SELECTED_STYLES,
+  OPTION_TEXT_STYLES,
+  OPTION_UNSELECTED_STYLES,
+  OPTION_WRONG_STYLES,
+  OPTIONS_CONTAINER_STYLES,
   PROMPT_STYLES,
-  CHOICES_CONTAINER_STYLES,
-  CHOICE_ROW_STYLES,
-  CHOICE_ROW_SELECTED_STYLES,
-  CHOICE_BADGE_STYLES,
-  CHOICE_BADGE_SELECTED_STYLES,
-  CHOICE_TEXT_STYLES,
+  TOPIC_LABEL_STYLES,
+  VERDICT_CORRECT_STYLES,
+  VERDICT_INCORRECT_STYLES,
+  VERDICT_ROW_STYLES,
 } from './QuestionCard.styles';
 
 interface QuestionCardProps {
   question: Question;
   selectedAnswer: string | null;
   onSelectAnswer: (answer: string) => void;
+  accent: SessionAccent;
   disabled?: boolean;
+  /** Present only once the correct answer is known (review of a graded question). */
+  feedback?: QuestionFeedback;
 }
 
 export function QuestionCard({
   question,
   selectedAnswer,
   onSelectAnswer,
+  accent,
   disabled = false,
+  feedback,
 }: QuestionCardProps) {
-  const choicesKeys = Object.keys(question.choices) as Array<'A' | 'B' | 'C' | 'D'>;
-  const theme = getSectionTheme(question.section);
+  const labels = OPTION_LABELS.filter((label) => label in question.choices);
+  const isCorrect = feedback ? selectedAnswer === feedback.correctAnswer : false;
 
   return (
-    <Card className={CARD_STYLES}>
-      <span className={cn(TOPIC_LABEL_STYLES, theme.text)}>{question.topic_display_name}</span>
-      <h2 className={PROMPT_STYLES}>{question.prompt}</h2>
+    <div>
+      <span className={cn(TOPIC_LABEL_STYLES, accent.text)}>{question.topic_display_name}</span>
+      <p className={PROMPT_STYLES}>
+        <MathText text={question.prompt} />
+      </p>
 
-      <div className={CHOICES_CONTAINER_STYLES}>
-        {choicesKeys.map((key) => {
-          const isSelected = selectedAnswer === key;
+      <div className={OPTIONS_CONTAINER_STYLES}>
+        {labels.map((label) => {
+          const isSelected = selectedAnswer === label;
+          const isRightAnswer = feedback ? feedback.correctAnswer === label : false;
+          const isWrongPick = Boolean(feedback) && isSelected && !isRightAnswer;
 
           return (
             <button
-              key={key}
+              key={label}
               type="button"
               disabled={disabled}
-              onClick={() => onSelectAnswer(key)}
+              onClick={() => onSelectAnswer(label)}
               aria-pressed={isSelected}
-              className={cn(CHOICE_ROW_STYLES, isSelected && CHOICE_ROW_SELECTED_STYLES)}
+              className={cn(
+                OPTION_STYLES,
+                isSelected && !feedback && cn(accent.solidBorder, accent.softBg),
+                (!isSelected || feedback) && OPTION_UNSELECTED_STYLES,
+                isRightAnswer && OPTION_CORRECT_STYLES,
+                isWrongPick && OPTION_WRONG_STYLES
+              )}
             >
               <span
-                className={cn(CHOICE_BADGE_STYLES, isSelected && CHOICE_BADGE_SELECTED_STYLES)}
+                className={cn(
+                  OPTION_BADGE_STYLES,
+                  isSelected && !feedback
+                    ? cn(accent.solidBg, 'text-white')
+                    : OPTION_BADGE_UNSELECTED_STYLES,
+                  isRightAnswer && OPTION_BADGE_CORRECT_STYLES,
+                  isWrongPick && OPTION_BADGE_WRONG_STYLES
+                )}
               >
-                {key}
+                {label}
               </span>
-              <span className={CHOICE_TEXT_STYLES}>{question.choices[key]}</span>
+              <span className={isSelected ? OPTION_TEXT_SELECTED_STYLES : OPTION_TEXT_STYLES}>
+                <MathText text={question.choices[label]} />
+              </span>
             </button>
           );
         })}
       </div>
-    </Card>
+
+      {feedback && (
+        <>
+          <p
+            className={cn(
+              VERDICT_ROW_STYLES,
+              isCorrect ? VERDICT_CORRECT_STYLES : VERDICT_INCORRECT_STYLES
+            )}
+          >
+            {isCorrect ? (
+              <CheckCircle2 className="size-4" aria-hidden="true" />
+            ) : (
+              <XCircle className="size-4" aria-hidden="true" />
+            )}
+            {isCorrect ? CORRECT_LABEL : INCORRECT_LABEL}
+          </p>
+
+          {feedback.explanation && (
+            <div className={EXPLANATION_STYLES}>
+              <p className={EXPLANATION_TITLE_STYLES}>{EXPLANATION_TITLE}</p>
+              <p className={EXPLANATION_BODY_STYLES}>
+                <MathText text={feedback.explanation} />
+              </p>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }

@@ -1,4 +1,5 @@
 import logging
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
@@ -38,12 +39,12 @@ from app.schemas.auth import (
     LoginRequest,
     LoginResponse,
     ResendVerificationByEmailRequest,
-    RefreshRequest,
-    RefreshResponse,
     ResetPasswordRequest,
     SignupRequest,
+    UpdateProfileRequest,
     VerifyEmailRequest,
 )
+from app.services.user_service import compose_full_name, update_user_profile
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -61,12 +62,16 @@ def _issue_session(response: Response, user: User) -> LoginResponse:
     access_token = create_access_token(user.id)
     is_production = settings.ENVIRONMENT == "production"
 
+    # SameSite=Lax in every environment: the frontend and backend are served
+    # from the same Vercel project/origin, so the cookie never needs to travel
+    # cross-site. Lax also blocks the cross-site form POSTs that would
+    # otherwise reach body-less endpoints (there is no CSRF token).
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
         secure=is_production,
-        samesite="none" if is_production else "lax",
+        samesite="lax",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
@@ -135,7 +140,16 @@ async def signup(
     try:
         new_user = await user_repository.create_user(
             db,
-            obj_in=user_in,
+            # create_user persists a single `full_name` column; compose it
+            # from the request's first/last name pair here rather than in
+            # the repository, matching how oauth_service builds the same
+            # SimpleNamespace shape for its own create_user call.
+            obj_in=SimpleNamespace(
+                email=user_in.email,
+                password=user_in.password,
+                full_name=compose_full_name(user_in.first_name, user_in.last_name),
+                role=user_in.role,
+            ),
         )
     except ValueError as exc:
         raise HTTPException(
@@ -218,17 +232,43 @@ async def login(
     return _issue_session(response, user)
 
 
+def _auth_user_response(user: User) -> AuthUserResponse:
+    return AuthUserResponse(
+        user_id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+        email_verified=user.email_verified,
+        oauth_provider=user.oauth_provider,
+    )
+
+
 @router.get("/me", response_model=AuthUserResponse)
 async def me(current_user: User = Depends(get_current_user)):
     """Return the current session's user, used by the frontend to check auth on load."""
-    return AuthUserResponse(
-        user_id=current_user.id,
-        email=current_user.email,
-        full_name=current_user.full_name,
-        role=current_user.role,
-        email_verified=current_user.email_verified,
-        oauth_provider=current_user.oauth_provider,
+    return _auth_user_response(current_user)
+
+
+@router.patch("/me", response_model=AuthUserResponse)
+async def update_me(
+    payload: UpdateProfileRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update the session user's display name.
+
+    Lives on /auth/me rather than /settings/profile so it is the write
+    counterpart of GET /auth/me: same resource, same AuthUserResponse shape, so
+    the client reuses one type and one query key. The /settings router is
+    scoped to OAuth provider linking, not the user record itself.
+    """
+    updated_user = await update_user_profile(
+        db,
+        user=current_user,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
     )
+    return _auth_user_response(updated_user)
 
 
 @router.post("/verify-email", response_model=AuthResponse)
@@ -377,40 +417,3 @@ async def reset_password_endpoint(
 async def logout(response: Response):
     """Clear the session cookie."""
     response.delete_cookie(key="access_token", path="/")
-
-
-@router.post("/refresh", response_model=RefreshResponse)
-async def refresh(
-    refresh_in: RefreshRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """Issue a new access token from a valid refresh token."""
-    from jose import JWTError, jwt
-
-    from app.core.security import ALGORITHM
-
-    try:
-        payload = jwt.decode(
-            refresh_in.refresh_token,
-            settings.SECRET_KEY,
-            algorithms=[ALGORITHM],
-        )
-        user_id = payload.get("sub")
-
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid refresh token",
-            )
-    except JWTError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-        ) from exc
-
-    new_access_token = create_access_token(user_id)
-
-    return RefreshResponse(
-        access_token=new_access_token,
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-    )

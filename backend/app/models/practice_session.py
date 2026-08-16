@@ -4,9 +4,11 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
+from app.core.constants import PracticeSessionStatus
 from app.core.database import Base
 
 if TYPE_CHECKING:
@@ -54,11 +56,25 @@ class PracticeSession(Base):
         server_default="25",
     )
 
-    status: Mapped[str] = mapped_column(
-        String(50),
+    # native_enum=False keeps the column a plain VARCHAR (no Postgres CREATE
+    # TYPE / ALTER TYPE ceremony on future value additions) while still
+    # giving the Python side a real PracticeSessionStatus, validated on
+    # write. The DB-level backstop is the CHECK constraint added in alembic
+    # revision f3a7c1e9d5b2_*, not this type — see that migration's
+    # docstring for why the constraint isn't declared here via
+    # create_constraint=True (it'd duplicate, not replace, the migration).
+    status: Mapped[PracticeSessionStatus] = mapped_column(
+        SAEnum(
+            PracticeSessionStatus,
+            name="practice_session_status",
+            native_enum=False,
+            length=50,
+            validate_strings=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
         nullable=False,
-        default="in_progress",
-        server_default="in_progress",
+        default=PracticeSessionStatus.IN_PROGRESS,
+        server_default=PracticeSessionStatus.IN_PROGRESS.value,
     )
 
     created_at: Mapped[datetime] = mapped_column(

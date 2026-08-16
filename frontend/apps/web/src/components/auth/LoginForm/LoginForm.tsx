@@ -1,6 +1,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { Button } from '@workspace/ui/components/button';
 import { Input } from '@workspace/ui/components/input';
 import { Label } from '@workspace/ui/components/label';
@@ -15,12 +16,16 @@ import {
   CARD_STYLES,
   TITLE_STYLES,
   SUBTITLE_STYLES,
+  OAUTH_SECTION_STYLES,
   formStyles,
+  FIELD_STYLES,
   inputStyles,
+  ERROR_STYLES,
   LABEL_ROW_STYLES,
   forgotPasswordStyles,
   buttonStyles,
   linkStyles,
+  FOOTER_STYLES,
 } from './LoginForm.styles';
 import {
   TITLE,
@@ -33,6 +38,8 @@ import {
   SUBMITTING_LABEL,
   NO_ACCOUNT,
   SIGNUP_LINK,
+  LOGIN_ERROR_TITLE,
+  INVALID_CREDENTIALS_DESCRIPTION,
 } from './LoginForm.constants';
 
 export function LoginForm() {
@@ -53,9 +60,19 @@ export function LoginForm() {
       setUser(user);
       navigate(ROUTES.DASHBOARD);
     } catch (error) {
+      // The backend intentionally returns the same generic 401 for "wrong
+      // password" and "no account with this email" -- distinguishing them
+      // here would let an attacker enumerate registered emails. Instead,
+      // every credential failure nudges toward signup without confirming or
+      // denying that the account exists.
+      const description =
+        isAxiosError(error) && error.response?.status === 401
+          ? INVALID_CREDENTIALS_DESCRIPTION
+          : getApiErrorDetail(error);
+
       toast({
-        title: 'Login failed',
-        description: getApiErrorDetail(error),
+        title: LOGIN_ERROR_TITLE,
+        description,
         variant: 'destructive',
       });
     }
@@ -66,18 +83,18 @@ export function LoginForm() {
       <h1 className={TITLE_STYLES}>{TITLE}</h1>
       <p className={SUBTITLE_STYLES}>{SUBTITLE}</p>
 
-      <div className="mt-6">
+      <div className={OAUTH_SECTION_STYLES}>
         <OAuthButtons intent="login" />
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className={formStyles}>
-        <div className="space-y-2">
+        <div className={FIELD_STYLES}>
           <Label htmlFor="email">{EMAIL_LABEL}</Label>
           <Input id="email" type="email" {...register('email')} className={inputStyles} />
-          {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+          {errors.email && <p className={ERROR_STYLES}>{errors.email.message}</p>}
         </div>
 
-        <div className="space-y-2">
+        <div className={FIELD_STYLES}>
           <div className={LABEL_ROW_STYLES}>
             <Label htmlFor="password">{PASSWORD_LABEL}</Label>
             <button
@@ -90,7 +107,7 @@ export function LoginForm() {
             </button>
           </div>
           <Input id="password" type="password" {...register('password')} className={inputStyles} />
-          {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
+          {errors.password && <p className={ERROR_STYLES}>{errors.password.message}</p>}
         </div>
 
         <Button type="submit" disabled={isSubmitting} className={buttonStyles}>
@@ -98,7 +115,7 @@ export function LoginForm() {
         </Button>
       </form>
 
-      <p className="mt-4 text-center text-sm text-muted-foreground">
+      <p className={FOOTER_STYLES}>
         {NO_ACCOUNT}{' '}
         <button type="button" onClick={() => navigate(ROUTES.SIGNUP)} className={linkStyles}>
           {SIGNUP_LINK}

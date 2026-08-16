@@ -4,12 +4,19 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
+from app.core.constants import (
+    ACTIVE_PRACTICE_SESSION_STATUSES,
+    PRACTICE_SESSION_QUESTION_STATUS_ANSWERED,
+    PRACTICE_SESSION_QUESTION_STATUS_ASSIGNED,
+    SESSION_ALREADY_IN_PROGRESS_DETAIL,
+    PracticeSessionStatus,
+)
 from app.models.attempt import Attempt
 from app.models.practice_context import PracticeContext
 from app.models.practice_session import PracticeSession
@@ -17,8 +24,11 @@ from app.models.practice_session_question import PracticeSessionQuestion
 from app.models.question import Question
 from app.models.topic import Topic
 from app.models.user import User
+from app.repositories.practice_session import practice_session_repository
 from app.schemas.practice import (
     AdaptiveUnlockResponse,
+    DomainNodeResponse,
+    MasteryRuleResponse,
     PracticeAbandonResponse,
     PracticeCompleteResponse,
     PracticeQuestionResponse,
@@ -27,15 +37,26 @@ from app.schemas.practice import (
     QuestionBreakdownItem,
     SectionPracticeOption,
     SectionSelectionResponse,
+    SkillTreeResponse,
     TopicActionItem,
+    TopicMasteryResponse,
+    TopicsResponse,
     UnlockRequirement,
     PublicQuestionResponse,
     ScoreSummary,
     SubmitAnswerRequest,
     SubmitAnswerResponse,
+    UpdateAttemptRequest,
+    UpdateAttemptResponse,
 )
 from app.services.recommendation_service import generate_study_plan_for_student
-from app.services.skill_scoring_service import classify_mistake_type, get_student_progress
+from app.services.skill_scoring_service import (
+    MASTERY_ACCURACY_PERCENT,
+    MASTERY_MIN_QUESTIONS,
+    classify_mistake_type,
+    get_section_skill_tree,
+    get_student_progress,
+)
 
 
 SECTION_CODES = {
@@ -48,6 +69,11 @@ SECTION_DISPLAY_NAMES = {
     "math": "Math",
     "reading_writing": "Reading and Writing",
 }
+
+# Number of completed section-mode sessions required before adaptive practice
+# unlocks for that section. Checked both when a section is selected (to show
+# lock status) and when a session completes (to report a fresh unlock state).
+REQUIRED_SECTION_SESSIONS_FOR_ADAPTIVE_UNLOCK = 3
 
 
 def _section_code_for_id(section_id: int) -> str:
@@ -71,6 +97,24 @@ async def _get_selected_section_id(
     return result.scalar_one_or_none()
 
 
+async def _count_completed_section_sessions(
+    db: AsyncSession,
+    student_id: int,
+    section_id: int,
+) -> int:
+    result = await db.execute(
+        select(func.count())
+        .select_from(PracticeSession)
+        .where(
+            PracticeSession.student_id == student_id,
+            PracticeSession.section_id == section_id,
+            PracticeSession.mode == "section",
+            PracticeSession.status == PracticeSessionStatus.COMPLETED,
+        )
+    )
+    return result.scalar_one()
+
+
 async def _upsert_selected_section(
     db: AsyncSession,
     student: User,
@@ -91,17 +135,53 @@ async def _upsert_selected_section(
     return context
 
 
-async def _load_section_topics(
+async def _load_section_topic_rows(
     db: AsyncSession,
     section_code: str,
-) -> list[TopicActionItem]:
+) -> list[Topic]:
+    """The section's topics in the canonical order that defines the public
+    `topic_id`: a 1-based position in this list, not a Topic primary key.
+
+    Every producer and consumer of that identifier must read the ordering
+    from here — `_load_section_topics`, `_resolve_topic_for_section`,
+    `get_topic_practice_positions` and `build_skill_tree` all hand out or
+    resolve positions, and they silently point at the wrong topic if any
+    one of them orders differently.
+    """
     result = await db.execute(
         select(Topic)
         .join(Question)
         .where(Question.section == section_code)
         .order_by(Topic.name.asc())
     )
-    topics = list(result.scalars().unique().all())
+    return list(result.scalars().unique().all())
+
+
+async def get_topic_practice_positions(
+    db: AsyncSession,
+) -> dict[int, tuple[str, int]]:
+    """Map a real Topic.id to (section_code, position) so callers holding a
+    database id can build a `topic_id` the practice endpoints accept.
+
+    Topics with no questions are absent — they have no section to be
+    positioned within and cannot be practised.
+    """
+    positions: dict[int, tuple[str, int]] = {}
+
+    for section_code in SECTION_CODES.values():
+        topics = await _load_section_topic_rows(db=db, section_code=section_code)
+
+        for position, topic in enumerate(topics, start=1):
+            positions[topic.id] = (section_code, position)
+
+    return positions
+
+
+async def _load_section_topics(
+    db: AsyncSession,
+    section_code: str,
+) -> list[TopicActionItem]:
+    topics = await _load_section_topic_rows(db=db, section_code=section_code)
 
     topic_items: list[TopicActionItem] = []
 
@@ -122,13 +202,7 @@ async def _resolve_topic_for_section(
     section_code: str,
     topic_id: int,
 ) -> Topic:
-    result = await db.execute(
-        select(Topic)
-        .join(Question)
-        .where(Question.section == section_code)
-        .order_by(Topic.name.asc())
-    )
-    topics = list(result.scalars().unique().all())
+    topics = await _load_section_topic_rows(db=db, section_code=section_code)
 
     if topic_id < 1 or topic_id > len(topics):
         raise HTTPException(status_code=404, detail="Topic not found")
@@ -147,18 +221,15 @@ async def set_selected_section(
     section_code = _section_code_for_id(section_id)
     await _upsert_selected_section(db=db, student=student, section_id=section_id)
 
-    completed_section_sessions = await db.execute(
-        select(func.count())
-        .select_from(PracticeSession)
-        .where(
-            PracticeSession.student_id == student.id,
-            PracticeSession.section_id == section_id,
-            PracticeSession.mode == "section",
-            PracticeSession.status == "completed",
-        )
+    # Commit explicitly here rather than relying on the endpoint's get_db
+    # dependency to commit on a clean return — every other mutating entrypoint
+    # in this file does the same, and everything from here on is a read.
+    await db.commit()
+
+    completed_count = await _count_completed_section_sessions(
+        db=db, student_id=student.id, section_id=section_id
     )
-    completed_count = completed_section_sessions.scalar_one()
-    required_sessions = 3
+    required_sessions = REQUIRED_SECTION_SESSIONS_FOR_ADAPTIVE_UNLOCK
     remaining_sessions = max(required_sessions - completed_count, 0)
     adaptive_is_locked = completed_count < required_sessions
 
@@ -196,6 +267,101 @@ async def set_selected_section(
     )
 
 
+async def get_skill_tree(
+    db: AsyncSession,
+    student: User,
+    section: str | None = None,
+) -> SkillTreeResponse:
+    """Domain -> skill accuracy tree for one section, for the mastery view.
+
+    `section` is the section code ("math" / "reading_writing"); omitting it
+    falls back to whatever section the student last selected, so the client
+    doesn't have to track it separately from POST /context/section.
+    """
+    if section is None:
+        selected_section_id = await _get_selected_section_id(db=db, student_id=student.id)
+
+        if selected_section_id is None:
+            raise HTTPException(status_code=400, detail="No section selected")
+
+        section = _section_code_for_id(selected_section_id)
+
+    if section not in SECTION_DISPLAY_NAMES:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    domains = await get_section_skill_tree(
+        db=db,
+        student_id=student.id,
+        section_code=section,
+    )
+
+    return SkillTreeResponse(
+        section=section,
+        section_display_name=SECTION_DISPLAY_NAMES[section],
+        mastery_rule=MasteryRuleResponse(
+            accuracy=MASTERY_ACCURACY_PERCENT,
+            min_questions=MASTERY_MIN_QUESTIONS,
+        ),
+        domains=[DomainNodeResponse(**domain) for domain in domains],
+    )
+
+
+async def get_topics_overview(db: AsyncSession, student: User) -> TopicsResponse:
+    """Every domain-level topic across every section, each self-reporting
+    its own section, for GET /api/v1/topics.
+
+    Unlike get_skill_tree (one section per call, with `section` only known
+    from the response wrapper), this covers every section in a single
+    response -- for views that need the whole curriculum at once and can't
+    rely on the caller already knowing which section a given topic belongs
+    to. Closes the gap flagged in WeakTopicsList.tsx ("weak_topics has no
+    section_id, so it can't deep-link into topic practice yet").
+
+    Reuses get_section_skill_tree per section rather than a separate query,
+    so a topic's accuracy here can never disagree with the mastery view or
+    dashboard, and gets the same "untouched topics still appear" guarantee
+    build_skill_tree already provides -- nothing is omitted just because a
+    student hasn't attempted it (see TopicMasteryResponse.started).
+    `topic_id` keeps the same section-scoped positional semantics
+    DomainNodeResponse.topic_id uses, so it can be passed straight through
+    as POST /practice/start's `topic_id`.
+
+    Doesn't yet reflect Topic.parent_topic_id nesting: get_section_skill_tree
+    groups directly by whatever Topic a Question points to, without rolling
+    a skill-level Topic's questions up under its parent domain. Real
+    parent/child rows depend on SCRUM-28's seed_cb_topics.py, which hasn't
+    landed yet -- until it does every Topic is flat (parent_topic_id is
+    always NULL), so this is a known follow-up, not something silently
+    assumed to already work.
+    """
+    topics: list[TopicMasteryResponse] = []
+
+    for section_code in SECTION_CODES.values():
+        domains = await get_section_skill_tree(
+            db=db,
+            student_id=student.id,
+            section_code=section_code,
+        )
+
+        for domain in domains:
+            topics.append(
+                TopicMasteryResponse(
+                    topic_id=domain["topic_id"],
+                    topic_code=domain["topic_code"],
+                    name=domain["name"],
+                    section=section_code,
+                    section_display_name=SECTION_DISPLAY_NAMES[section_code],
+                    accuracy=domain["accuracy"],
+                    questions_attempted=domain["questions_attempted"],
+                    questions_correct=domain["questions_correct"],
+                    mastered=domain["mastered"],
+                    started=domain["questions_attempted"] > 0,
+                )
+            )
+
+    return TopicsResponse(topics=topics)
+
+
 def _public_question(question: Question, question_id: int) -> PublicQuestionResponse:
     return PublicQuestionResponse(
         question_id=question_id,
@@ -210,16 +376,9 @@ async def _get_active_session_for_student(
     db: AsyncSession,
     student_id: int,
 ) -> PracticeSession:
-    result = await db.execute(
-        select(PracticeSession)
-        .where(
-            PracticeSession.student_id == student_id,
-            PracticeSession.status.in_(["in_progress", "ready_to_complete"]),
-        )
-        .order_by(PracticeSession.created_at.desc())
-        .limit(1)
+    session = await practice_session_repository.get_active_session_for_student(
+        db, student_id
     )
-    session = result.scalar_one_or_none()
 
     if session is None:
         raise HTTPException(status_code=404, detail="No active practice session found")
@@ -250,16 +409,34 @@ def _is_session_stale(session: PracticeSession, last_attempt_at: datetime | None
 async def _get_next_assigned_question(
     db: AsyncSession,
     session_id: int,
+    *,
+    for_update: bool = False,
 ) -> PracticeSessionQuestion | None:
-    result = await db.execute(
+    query = (
         select(PracticeSessionQuestion)
         .where(
             PracticeSessionQuestion.practice_session_id == session_id,
-            PracticeSessionQuestion.status == "assigned",
+            PracticeSessionQuestion.status == PRACTICE_SESSION_QUESTION_STATUS_ASSIGNED,
         )
         .order_by(PracticeSessionQuestion.position.asc())
         .limit(1)
     )
+
+    # submit_answer passes for_update=True: it reads this row, mutates its
+    # status, then re-counts remaining assigned rows to decide whether the
+    # session is ready to complete — three round trips with nothing stopping
+    # two concurrent calls (a double-clicked "Next", a retried request) from
+    # both reading the row as still "assigned" before either writes back.
+    # The row lock serializes them: the second call blocks here until the
+    # first commits, then re-reads the now-"answered" row and (since it no
+    # longer matches the WHERE clause) correctly finds nothing to grab
+    # instead of racing the first to mutate/recount the same row. Read-only
+    # callers (get_current_question, start_practice_session) don't need
+    # this and pass the default.
+    if for_update:
+        query = query.with_for_update()
+
+    result = await db.execute(query)
 
     return result.scalar_one_or_none()
 
@@ -289,16 +466,9 @@ async def start_practice_session(
     if student.role != "student":
         raise HTTPException(status_code=400, detail="User is not a student")
 
-    existing_session_result = await db.execute(
-        select(PracticeSession)
-        .where(
-            PracticeSession.student_id == student.id,
-            PracticeSession.status.in_(["in_progress", "ready_to_complete"]),
-        )
-        .order_by(PracticeSession.created_at.desc())
-        .limit(1)
+    active_session = await practice_session_repository.get_active_session_for_student(
+        db, student.id
     )
-    active_session = existing_session_result.scalar_one_or_none()
 
     if active_session is not None:
         last_attempt_at = await _get_latest_attempt_at(db=db, session_id=active_session.id)
@@ -306,14 +476,14 @@ async def start_practice_session(
         if not _is_session_stale(active_session, last_attempt_at):
             raise HTTPException(
                 status_code=409,
-                detail="A practice session is already in progress for this student.",
+                detail=SESSION_ALREADY_IN_PROGRESS_DETAIL,
             )
 
         # Stale and either never answered or idle past the timeout — supersede
         # it rather than leaving the student permanently locked out. A student
         # who explicitly wants to abandon a fresh session should use
         # abandon_practice_session instead of waiting for this to kick in.
-        active_session.status = "abandoned"
+        active_session.status = PracticeSessionStatus.ABANDONED
         await db.flush()
 
     question_count = request.question_count or settings.DEFAULT_PRACTICE_QUESTION_COUNT
@@ -375,10 +545,34 @@ async def start_practice_session(
                 Question.section == _section_code_for_id(selected_section_id)
             )
 
-    question_result = await db.execute(
-        question_query.order_by(func.random()).limit(question_count)
+    attempted_ids_sq = (
+        select(Attempt.question_id)
+        .join(PracticeSession, PracticeSession.id == Attempt.practice_session_id)
+        .where(
+            Attempt.student_id == student.id,
+            PracticeSession.status == PracticeSessionStatus.COMPLETED,
+        )
+        .scalar_subquery()
     )
-    questions = list(question_result.scalars().unique().all())
+
+    fresh_result = await db.execute(
+        question_query.where(Question.id.not_in(attempted_ids_sq))
+        .order_by(func.random())
+        .limit(question_count)
+    )
+    questions = list(fresh_result.scalars().unique().all())
+
+    if len(questions) < question_count:
+        already_picked_ids = [q.id for q in questions]
+        supplement_filter = (
+            [Question.id.not_in(already_picked_ids)] if already_picked_ids else []
+        )
+        fallback_result = await db.execute(
+            question_query.where(*supplement_filter)
+            .order_by(func.random())
+            .limit(question_count - len(questions))
+        )
+        questions.extend(list(fallback_result.scalars().unique().all()))
 
     if not questions:
         raise HTTPException(
@@ -393,7 +587,7 @@ async def start_practice_session(
         title=f"{request.mode.title()} Practice Session",
         mode=request.mode,
         question_count=len(questions),
-        status="in_progress",
+        status=PracticeSessionStatus.IN_PROGRESS,
     )
 
     db.add(session)
@@ -406,7 +600,7 @@ async def start_practice_session(
         await db.rollback()
         raise HTTPException(
             status_code=409,
-            detail="A practice session is already in progress for this student.",
+            detail=SESSION_ALREADY_IN_PROGRESS_DETAIL,
         )
 
     for index, question in enumerate(questions, start=1):
@@ -415,7 +609,7 @@ async def start_practice_session(
                 practice_session_id=session.id,
                 question_id=question.id,
                 position=index,
-                status="assigned",
+                status=PRACTICE_SESSION_QUESTION_STATUS_ASSIGNED,
             )
         )
 
@@ -453,7 +647,7 @@ async def get_current_question(
 ) -> PracticeQuestionResponse:
     session = await _get_active_session_for_student(db=db, student_id=student.id)
 
-    if session.status not in {"in_progress", "ready_to_complete"}:
+    if session.status not in ACTIVE_PRACTICE_SESSION_STATUSES:
         return PracticeQuestionResponse(
             status=session.status,
             current_position=None,
@@ -475,19 +669,19 @@ async def get_current_question(
         if session_question is None:
             raise HTTPException(status_code=404, detail="Question not found")
 
-        if session_question.status != "assigned":
+        if session_question.status != PRACTICE_SESSION_QUESTION_STATUS_ASSIGNED:
             raise HTTPException(
                 status_code=400,
                 detail="Question has already been answered",
             )
 
     if session_question is None:
-        if session.status == "in_progress":
-            session.status = "ready_to_complete"
+        if session.status == PracticeSessionStatus.IN_PROGRESS:
+            session.status = PracticeSessionStatus.READY_TO_COMPLETE
             await db.commit()
 
         return PracticeQuestionResponse(
-            status="ready_to_complete",
+            status=PracticeSessionStatus.READY_TO_COMPLETE,
             current_position=None,
             total_questions=session.question_count,
             question=None,
@@ -513,13 +707,15 @@ async def submit_answer(
 ) -> SubmitAnswerResponse:
     session = await _get_active_session_for_student(db=db, student_id=student.id)
 
-    if session.status != "in_progress":
+    if session.status != PracticeSessionStatus.IN_PROGRESS:
         raise HTTPException(
             status_code=400,
             detail="Practice session is not accepting answers",
         )
 
-    session_question = await _get_next_assigned_question(db=db, session_id=session.id)
+    session_question = await _get_next_assigned_question(
+        db=db, session_id=session.id, for_update=True
+    )
 
     if session_question is None:
         raise HTTPException(
@@ -560,26 +756,38 @@ async def submit_answer(
 
     db.add(attempt)
 
-    session_question.status = "answered"
+    session_question.status = PRACTICE_SESSION_QUESTION_STATUS_ANSWERED
     session_question.answered_at = datetime.now(timezone.utc)
 
-    # autoflush is disabled on this session (see app/core/database.py), so the
-    # status change above must be flushed explicitly before the COUNT query
-    # below, or it undercounts answered questions by one on every submission.
-    await db.flush()
+    try:
+        # autoflush is disabled on this session (see app/core/database.py), so
+        # the status change above must be flushed explicitly before the COUNT
+        # query below, or it undercounts answered questions by one on every
+        # submission.
+        await db.flush()
+    except IntegrityError:
+        # Lost a race against a concurrent submission for the same question —
+        # two requests both read this question while it was still "assigned"
+        # before either wrote back. The unique index on
+        # attempts(practice_session_id, question_id) caught it.
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="This question was already answered by a concurrent request.",
+        )
 
     remaining_result = await db.execute(
         select(func.count())
         .select_from(PracticeSessionQuestion)
         .where(
             PracticeSessionQuestion.practice_session_id == session.id,
-            PracticeSessionQuestion.status == "assigned",
+            PracticeSessionQuestion.status == PRACTICE_SESSION_QUESTION_STATUS_ASSIGNED,
         )
     )
     remaining_questions = remaining_result.scalar_one()
 
     if remaining_questions == 0:
-        session.status = "ready_to_complete"
+        session.status = PracticeSessionStatus.READY_TO_COMPLETE
 
     await db.commit()
     await db.refresh(attempt)
@@ -588,6 +796,7 @@ async def submit_answer(
         saved=True,
         answered_position=session_question.position,
         remaining_questions=remaining_questions,
+        attempt_id=attempt.id,
     )
 
 
@@ -607,35 +816,59 @@ async def abandon_practice_session(
     in start_practice_session to kick in."""
     session = await _get_active_session_for_student(db=db, student_id=student.id)
 
-    session.status = "abandoned"
+    session.status = PracticeSessionStatus.ABANDONED
     await db.commit()
 
     return PracticeAbandonResponse(status=session.status)
 
 
-async def complete_practice_session(
-    db: AsyncSession,
-    student: User,
-) -> PracticeCompleteResponse:
-    session = await _get_active_session_for_student(db=db, student_id=student.id)
+async def expire_stale_practice_sessions(db: AsyncSession) -> int:
+    """Sweep every in_progress/ready_to_complete session, across all
+    students, that's been inactive past PRACTICE_SESSION_EXPIRE_HOURS and
+    mark it expired.
 
-    attempts_result = await db.execute(
-        select(Attempt).where(Attempt.practice_session_id == session.id)
+    This exists because the staleness handling in start_practice_session
+    only fires when the *same* student who owns the stale session tries to
+    start a new one -- a student who never comes back leaves their session
+    sitting in_progress forever with nothing to ever revisit it. This
+    function is that revisit: called from a schedule (see
+    backend/scripts/expire_stale_practice_sessions.py, invoked by the
+    expire-practice-sessions GitHub Actions cron), not from any request
+    path, so it runs without depending on student activity at all.
+
+    Returns the number of sessions expired.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        hours=settings.PRACTICE_SESSION_EXPIRE_HOURS
     )
-    attempts = list(attempts_result.scalars().all())
+    expired_count = await practice_session_repository.expire_stale_sessions(
+        db, cutoff=cutoff
+    )
+    await db.commit()
 
-    if not attempts:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot complete a session with no answers",
+    return expired_count
+
+
+async def _build_session_result(
+    db: AsyncSession,
+    session: PracticeSession,
+    attempts: list[Attempt] | None = None,
+) -> PracticeCompleteResponse:
+    """Assemble the results payload for one completed session.
+
+    Read-only and side-effect free, so it serves both the completion call and
+    any later re-read of the same session (GET /practice/results/latest).
+    `attempts` is accepted so the completion path doesn't re-query rows it
+    already loaded.
+    """
+    if attempts is None:
+        attempts_result = await db.execute(
+            select(Attempt).where(Attempt.practice_session_id == session.id)
         )
-
-    session.status = "completed"
+        attempts = list(attempts_result.scalars().all())
 
     correct = sum(1 for attempt in attempts if attempt.is_correct)
     incorrect = len(attempts) - correct
-    await db.commit()
-
     total = len(attempts)
     percentage = round((correct / total) * 100, 1) if total else 0.0
 
@@ -670,6 +903,7 @@ async def complete_practice_session(
             is_correct=attempt.is_correct,
             confidence_level=attempt.confidence_level,
             explanation=question.explanation,
+            time_spent_seconds=attempt.time_spent_seconds,
         )
         for _session_question, attempt, question in breakdown_result.all()
     ]
@@ -682,18 +916,10 @@ async def complete_practice_session(
     adaptive_unlock: AdaptiveUnlockResponse | None = None
 
     if session.mode == "section" and session.section_id is not None:
-        completed_section_sessions = await db.execute(
-            select(func.count())
-            .select_from(PracticeSession)
-            .where(
-                PracticeSession.student_id == student.id,
-                PracticeSession.section_id == session.section_id,
-                PracticeSession.mode == "section",
-                PracticeSession.status == "completed",
-            )
+        completed_count = await _count_completed_section_sessions(
+            db=db, student_id=session.student_id, section_id=session.section_id
         )
-        completed_count = completed_section_sessions.scalar_one()
-        required_sessions = 3
+        required_sessions = REQUIRED_SECTION_SESSIONS_FOR_ADAPTIVE_UNLOCK
 
         adaptive_unlock = AdaptiveUnlockResponse(
             is_unlocked=completed_count >= required_sessions,
@@ -702,13 +928,10 @@ async def complete_practice_session(
             remaining_sessions=max(required_sessions - completed_count, 0),
         )
 
-    await generate_study_plan_for_student(
-        db=db,
-        student_id=session.student_id,
-    )
-
     return PracticeCompleteResponse(
-        status="completed",
+        status=PracticeSessionStatus.COMPLETED,
+        session_id=session.id,
+        completed_at=session.updated_at,
         score=ScoreSummary(
             correct=correct,
             incorrect=incorrect,
@@ -721,3 +944,133 @@ async def complete_practice_session(
         section=section_code,
         section_display_name=section_display_name,
     )
+
+
+async def get_latest_session_result(
+    db: AsyncSession,
+    student: User,
+) -> PracticeCompleteResponse:
+    """Re-read the student's most recently completed session.
+
+    Backs the Results tab, which is reachable without having just finished a
+    session (direct link, refresh, new device) — cases where the client-side
+    store that POST /practice/complete populates is empty.
+
+    Only `completed` sessions qualify: abandoned and expired ones were never
+    scored, and an in-progress one belongs to the practice flow, not results.
+    """
+    result = await db.execute(
+        select(PracticeSession)
+        .where(
+            PracticeSession.student_id == student.id,
+            PracticeSession.status == PracticeSessionStatus.COMPLETED,
+        )
+        .order_by(PracticeSession.updated_at.desc(), PracticeSession.id.desc())
+        .limit(1)
+    )
+    session = result.scalar_one_or_none()
+
+    if session is None:
+        raise HTTPException(status_code=404, detail="No completed practice sessions yet")
+
+    return await _build_session_result(db=db, session=session)
+
+
+async def complete_practice_session(
+    db: AsyncSession,
+    student: User,
+) -> PracticeCompleteResponse:
+    session = await _get_active_session_for_student(db=db, student_id=student.id)
+
+    attempts_result = await db.execute(
+        select(Attempt).where(Attempt.practice_session_id == session.id)
+    )
+    attempts = list(attempts_result.scalars().all())
+
+    if not attempts:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot complete a session with no answers",
+        )
+
+    # Atomic conditional update rather than a plain read-then-write: two
+    # concurrent /complete calls could otherwise both pass the active-session
+    # fetch above and both flip status + generate a duplicate study plan.
+    # The WHERE clause re-checks the status hasn't already moved out of the
+    # active set since we read it — if a concurrent request already
+    # completed it, this affects 0 rows instead of clobbering that result.
+    update_result = await db.execute(
+        update(PracticeSession)
+        .where(
+            PracticeSession.id == session.id,
+            PracticeSession.status.in_(ACTIVE_PRACTICE_SESSION_STATUSES),
+        )
+        .values(status=PracticeSessionStatus.COMPLETED)
+    )
+
+    if update_result.rowcount == 0:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="This practice session was already completed by a concurrent request.",
+        )
+
+    session.status = PracticeSessionStatus.COMPLETED
+
+    await db.commit()
+    # The Core UPDATE above bumped `updated_at` via its onupdate default, but
+    # the session factory uses expire_on_commit=False, so the in-memory object
+    # still holds the pre-update value. Re-read it so `completed_at` matches
+    # what GET /practice/results/latest will later report for this session.
+    await db.refresh(session)
+
+    await generate_study_plan_for_student(
+        db=db,
+        student_id=session.student_id,
+    )
+
+    return await _build_session_result(db=db, session=session, attempts=attempts)
+
+
+async def update_attempt_answer(
+    db: AsyncSession,
+    student: User,
+    attempt_id: int,
+    request: UpdateAttemptRequest,
+) -> UpdateAttemptResponse:
+    result = await db.execute(
+        select(Attempt)
+        .join(PracticeSession, PracticeSession.id == Attempt.practice_session_id)
+        .where(
+            Attempt.id == attempt_id,
+            Attempt.student_id == student.id,
+            PracticeSession.status == PracticeSessionStatus.IN_PROGRESS,
+        )
+    )
+    attempt = result.scalar_one_or_none()
+
+    if attempt is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Attempt not found or session is no longer in progress",
+        )
+
+    question = await db.get(Question, attempt.question_id)
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    if request.selected_answer is not None and request.selected_answer not in question.choices:
+        raise HTTPException(status_code=400, detail="Selected answer is invalid for this question")
+
+    attempt.selected_answer = request.selected_answer
+    attempt.is_correct = request.selected_answer == question.correct_answer
+    attempt.mistake_type = classify_mistake_type(
+        selected_answer=request.selected_answer,
+        is_correct=attempt.is_correct,
+        time_spent_seconds=attempt.time_spent_seconds,
+        confidence_level=attempt.confidence_level,
+    )
+
+    await db.commit()
+
+    return UpdateAttemptResponse(saved=True, attempt_id=attempt.id)

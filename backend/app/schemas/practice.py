@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
+
+from app.core.constants import PracticeSessionStatus
 
 
 PracticeMode = Literal["adaptive", "topic", "section"]
@@ -53,9 +57,26 @@ class DashboardProgressResponse(BaseModel):
 
 
 class DashboardWeakTopicResponse(BaseModel):
+    # The real Topic primary key. Note this is deliberately NOT the id the
+    # practice endpoints take — see practice_topic_id below.
     topic_id: int
     display_name: str
+    # Accuracy over this topic, 0-100. Named "mastery" for the dashboard's
+    # sake; it is the same number the skill tree reports as `accuracy`.
     mastery_score: float
+    questions_attempted: int
+    questions_correct: int
+
+    # Deep-link fields. All four are None only when the topic has no
+    # questions left in any section (so it can't be practised); the client
+    # renders such a row without a start action rather than dropping it,
+    # since the weakness itself is still worth showing.
+    section: Optional[str] = None
+    section_id: Optional[int] = None
+    section_display_name: Optional[str] = None
+    # The section-scoped 1-based position POST /practice/start expects as
+    # `topic_id` — see practice_service._load_section_topic_rows.
+    practice_topic_id: Optional[int] = None
 
 
 class DashboardSectionResponse(BaseModel):
@@ -101,14 +122,14 @@ class PublicQuestionResponse(BaseModel):
 
 
 class PracticeQuestionResponse(BaseModel):
-    status: str
+    status: PracticeSessionStatus
     current_position: Optional[int] = None
     total_questions: int
     question: Optional[PublicQuestionResponse] = None
 
 
 class PracticeStartResponse(BaseModel):
-    status: str
+    status: PracticeSessionStatus
     mode: str
     total_questions: int
     current_position: Optional[int] = None
@@ -116,19 +137,39 @@ class PracticeStartResponse(BaseModel):
 
 
 class PracticeAbandonResponse(BaseModel):
-    status: str
+    status: PracticeSessionStatus
 
 
 class SubmitAnswerRequest(BaseModel):
     selected_answer: Optional[str] = None
     time_spent_seconds: Optional[int] = Field(default=None, ge=0)
-    confidence_level: Optional[int] = Field(default=None, ge=1, le=5)
+    # The redesigned runner sends this as `confidence`; the original client
+    # sends `confidence_level`. Accept either so neither has to change in
+    # lockstep with the other. Stays optional — a client that sends no
+    # rating at all still submits successfully, and the attempt just has no
+    # confidence recorded.
+    confidence_level: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=5,
+        validation_alias=AliasChoices("confidence", "confidence_level"),
+    )
 
 
 class SubmitAnswerResponse(BaseModel):
     saved: bool
     answered_position: int
     remaining_questions: int
+    attempt_id: int
+
+
+class UpdateAttemptRequest(BaseModel):
+    selected_answer: Optional[str] = None
+
+
+class UpdateAttemptResponse(BaseModel):
+    saved: bool
+    attempt_id: int
 
 
 class ScoreSummary(BaseModel):
@@ -155,13 +196,110 @@ class QuestionBreakdownItem(BaseModel):
     is_correct: bool
     confidence_level: Optional[int] = None
     explanation: Optional[str] = None
+    time_spent_seconds: Optional[int] = None
 
 
 class PracticeCompleteResponse(BaseModel):
-    status: str
+    """Returned both by POST /practice/complete (the session just finished) and
+    by GET /practice/results/latest (the same summary re-read later), so the
+    results screen renders one shape whether it was reached straight from a
+    session or from a cold visit to the Results tab.
+    """
+
+    status: PracticeSessionStatus
+    session_id: Optional[int] = None
+    completed_at: Optional[datetime] = None
     score: ScoreSummary
     adaptive_unlock: Optional[AdaptiveUnlockResponse] = None
     average_confidence: Optional[float] = None
     question_breakdown: list[QuestionBreakdownItem] = []
     section: Optional[str] = None
     section_display_name: Optional[str] = None
+
+
+class _SkillTreeNode(BaseModel):
+    """Base for the skill-tree payload. Unlike the rest of this module the
+    tree serializes as camelCase, because it feeds a mastery view whose
+    node shape (name / accuracy / questionsAttempted / mastered) is fixed
+    by the design and is rendered identically at both levels of the tree.
+    Populate-by-name keeps the service layer constructing them with normal
+    snake_case kwargs."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+class SkillNodeResponse(_SkillTreeNode):
+    name: str
+    accuracy: int
+    questions_attempted: int
+    questions_correct: int
+    mastered: bool
+
+
+class DomainNodeResponse(_SkillTreeNode):
+    name: str
+    # 1-based index of this domain within its section, ordered by name —
+    # the same identifier POST /practice/start takes as `topic_id`, not the
+    # underlying Topic primary key. Matches SectionSelectionResponse.topics.
+    topic_id: int
+    topic_code: str
+    accuracy: int
+    questions_attempted: int
+    questions_correct: int
+    mastered: bool
+    skills: list[SkillNodeResponse] = []
+
+
+class MasteryRuleResponse(_SkillTreeNode):
+    accuracy: int
+    min_questions: int
+
+
+class SkillTreeResponse(_SkillTreeNode):
+    section: str
+    section_display_name: str
+    mastery_rule: MasteryRuleResponse
+    domains: list[DomainNodeResponse] = []
+
+
+class TopicMasteryResponse(BaseModel):
+    """One deep-linkable topic (a domain -- see Topic.parent_topic_id) with
+    this student's mastery for it and its own section attached, for GET
+    /api/v1/topics.
+
+    Unlike SkillTreeResponse (one section per call, `section` only known
+    from the response wrapper), this spans every section in a single
+    response, so each item has to self-report its own `section`/
+    `section_display_name` for a client to group by -- the gap flagged in
+    WeakTopicsList.tsx ("weak_topics has no section_id, so it can't
+    deep-link into topic practice").
+
+    `topic_id` deliberately carries the same section-scoped positional
+    semantics as DomainNodeResponse.topic_id (see that field's docstring),
+    not the Topic primary key, so it can be passed straight through as
+    POST /practice/start's `topic_id`. Plain snake_case rather than
+    _SkillTreeNode's camelCase: this feeds the rest of this module's
+    dashboard-family consumers (e.g. DashboardWeakTopicResponse below), not
+    the camelCase-specific mastery view.
+
+    `started` is explicit rather than left for the client to infer from
+    `questions_attempted == 0`, since a topic can also sit at 0% accuracy
+    after real (if entirely wrong) attempts -- those two states have to
+    stay distinguishable per the topics-endpoint "not started" acceptance
+    criterion.
+    """
+
+    topic_id: int
+    topic_code: str
+    name: str
+    section: str
+    section_display_name: str
+    accuracy: int
+    questions_attempted: int
+    questions_correct: int
+    mastered: bool
+    started: bool
+
+
+class TopicsResponse(BaseModel):
+    topics: list[TopicMasteryResponse] = []

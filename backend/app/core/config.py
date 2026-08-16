@@ -8,15 +8,36 @@ from urllib.parse import (
     urlunsplit,
 )
 
-from pydantic import AliasChoices, Field, ValidationInfo, field_validator
+from pydantic import (
+    AliasChoices,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ENV_FILE = BACKEND_ROOT / ".env"
 
+# Minimum entropy we require of a production signing key.
+SECRET_KEY_MIN_LENGTH = 32
+
+# Values shipped in the repo / .env.example. Safe for local dev and tests,
+# never acceptable in production.
+PLACEHOLDER_SECRET_KEYS = frozenset(
+    {
+        "change-this-secret-key",
+        "changeme",
+        "secret",
+        "your-secret-key",
+        "your-secret-key-here",
+    }
+)
+
 
 class Settings(BaseSettings):
+
     model_config = SettingsConfigDict(
         env_file=str(BACKEND_ENV_FILE),
         env_file_encoding="utf-8",
@@ -44,6 +65,27 @@ class Settings(BaseSettings):
     # abandoned and auto-superseded the next time the student starts practice,
     # instead of permanently blocking them with a 409.
     PRACTICE_SESSION_STALE_MINUTES: int = 180
+
+    # Final sweep for sessions whose student never comes back at all, so
+    # PRACTICE_SESSION_STALE_MINUTES above never gets a chance to fire (that
+    # check only runs when *that* student starts a new session). Applied by
+    # expire_stale_practice_sessions in practice_service.py, invoked on a
+    # schedule via scripts/expire_stale_practice_sessions.py -- not tied to
+    # any request path, so a session left in_progress/ready_to_complete this
+    # long gets marked expired regardless of whether anyone ever asks again.
+    # Deliberately much longer than PRACTICE_SESSION_STALE_MINUTES: this is
+    # the no-second-chances backstop, not the same-student handoff.
+    PRACTICE_SESSION_EXPIRE_HOURS: int = 24
+
+    # An Idempotency-Key reservation stuck "in_progress" for longer than this
+    # (see app/services/idempotency_service.py) is treated as abandoned --
+    # the request that created it was presumably killed mid-flight (per
+    # database.py's NullPool comment on Vercel/Neon) rather than ever
+    # finishing -- so a retry with the same key can reclaim it and actually
+    # run, instead of getting stuck behind a 409 forever. Short window:
+    # recovering from one killed request, not tracking a long-lived session
+    # like PRACTICE_SESSION_STALE_MINUTES above.
+    IDEMPOTENCY_KEY_STALE_MINUTES: int = 5
 
     # Security
     SECRET_KEY: str = "change-this-secret-key"
@@ -146,6 +188,32 @@ class Settings(BaseSettings):
             for origin in raw_value.split(",")
             if origin.strip()
         ]
+
+    @model_validator(mode="after")
+    def enforce_production_secret_key(self) -> "Settings":
+        """Fail fast in production on a placeholder or low-entropy SECRET_KEY.
+
+        The default is deliberately kept for local dev and the test suite, so
+        the only guard is this startup check.
+        """
+        if self.ENVIRONMENT != "production":
+            return self
+
+        secret_key = (self.SECRET_KEY or "").strip()
+
+        if secret_key.lower() in PLACEHOLDER_SECRET_KEYS:
+            raise ValueError(
+                "SECRET_KEY is set to a known placeholder value. Set a unique, "
+                "randomly generated SECRET_KEY when ENVIRONMENT=production."
+            )
+
+        if len(secret_key) < SECRET_KEY_MIN_LENGTH:
+            raise ValueError(
+                f"SECRET_KEY must be at least {SECRET_KEY_MIN_LENGTH} characters "
+                "when ENVIRONMENT=production."
+            )
+
+        return self
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod

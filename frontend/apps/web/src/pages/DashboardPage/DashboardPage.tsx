@@ -1,101 +1,135 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ClipboardList, TrendingUp, Flame, LogOut, Settings as SettingsIcon } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
+import { ChartNoAxesColumn, Check, Flame, TrendingUp } from 'lucide-react';
 import { Button } from '@workspace/ui/components/button';
 import { Skeleton } from '@workspace/ui/components/skeleton';
-import { StatCard } from '@/components/dashboard/StatCard/StatCard';
-import { WeakTopicsList } from '@/components/dashboard/WeakTopicsList/WeakTopicsList';
-import { SectionCard } from '@/components/dashboard/SectionCard/SectionCard';
-import { EstimatedScoreCard } from '@/components/dashboard/EstimatedScoreCard/EstimatedScoreCard';
-import { PracticeModal } from '@/components/dashboard/PracticeModal/PracticeModal';
 import { EmailVerificationBanner } from '@/components/dashboard/EmailVerificationBanner/EmailVerificationBanner';
-import { getDashboard } from '@/services/dashboard-service';
-import { logout } from '@/services/auth-service';
-import { useAuthStore } from '@/store/auth-store';
-import { usePracticeSessionStore } from '@/store/practice-session-store';
-import { useResultsStore } from '@/store/results-store';
-import { queryKeys } from '@/constants/query-keys';
-import { ROUTES } from '@/constants/routes';
-import { getApiErrorDetail } from '@/utils/api-errors';
-import type { DashboardResponse } from '@/types/api';
+import { EstimatedScoreCard } from '@/components/dashboard/EstimatedScoreCard/EstimatedScoreCard';
+import { SectionCard } from '@/components/dashboard/SectionCard/SectionCard';
+import { StatCard } from '@/components/dashboard/StatCard/StatCard';
+import { WeakTopicsCard } from '@/components/dashboard/WeakTopicsCard/WeakTopicsCard';
 import {
-  GREETING_EYEBROW,
-  GREETING_PREFIX,
-  GREETING_EXCLAMATION,
-  LOGOUT_LABEL,
-  SETTINGS_LABEL,
-  SECTIONS_TITLE,
-  QUESTIONS_CORRECT_LABEL,
-  QUESTIONS_CORRECT_SUBTEXT_PREFIX,
-  QUESTIONS_CORRECT_SUBTEXT_SUFFIX,
-  TESTS_TAKEN_LABEL,
-  TESTS_TAKEN_SUBTEXT_PREFIX,
-  TESTS_TAKEN_SUBTEXT_SUFFIX,
+  SESSION_CONFLICT_MESSAGE,
+  START_ERROR_MESSAGE,
+} from '@/components/dashboard/WeakTopicsCard/WeakTopicsCard.constants';
+import { queryKeys } from '@/constants/query-keys';
+import { practicePath } from '@/constants/routes';
+import { getDashboard } from '@/services/dashboard-service';
+import { selectSection, startPractice } from '@/services/practice-service';
+import { useAppShellStore } from '@/store/app-shell-store';
+import { useAuthStore } from '@/store/auth-store';
+import { getApiErrorDetail } from '@/utils/api-errors';
+import { getFirstName } from '@/utils/user-display';
+import type { DashboardResponse, User, WeakTopic } from '@/types/api';
+import {
+  ACCURACY_CAPTION_NO_TREND,
+  ACCURACY_CAPTION_SUFFIX,
   ACCURACY_LABEL,
-  ACCURACY_TREND_SUFFIX,
+  DAY_STREAK_CAPTION,
+  DAY_STREAK_CAPTION_EMPTY,
   DAY_STREAK_LABEL,
-  DAY_STREAK_SUBTEXT,
+  ERROR_RETRY_LABEL,
+  GREETING_PREFIX,
+  GREETING_SUFFIX,
+  NO_ATTEMPTS_MESSAGE,
+  NO_ATTEMPTS_TITLE,
   PERCENT_SUFFIX,
+  QUESTIONS_CORRECT_CAPTION_PREFIX,
+  QUESTIONS_CORRECT_CAPTION_SUFFIX,
+  QUESTIONS_CORRECT_LABEL,
+  SECTIONS_EMPTY_MESSAGE,
+  SECTIONS_TITLE,
+  TESTS_TAKEN_CAPTION_PREFIX,
+  TESTS_TAKEN_CAPTION_SUFFIX,
+  TESTS_TAKEN_LABEL,
+  getTimeOfDayGreeting,
 } from './DashboardPage.constants';
 import {
+  BANNER_WRAPPER_STYLES,
   CONTAINER_STYLES,
-  HEADER_ROW_STYLES,
-  HEADER_ACTIONS_STYLES,
-  LOGOUT_BUTTON_STYLES,
-  SETTINGS_BUTTON_STYLES,
+  EMPTY_MESSAGE_STYLES,
+  EMPTY_PANEL_STYLES,
+  EMPTY_TITLE_STYLES,
+  ERROR_MESSAGE_STYLES,
+  ERROR_PANEL_STYLES,
+  GREETING_BLOCK_STYLES,
   GREETING_EYEBROW_STYLES,
   GREETING_STYLES,
-  STATS_GRID_STYLES,
+  SCORE_BLOCK_STYLES,
+  SECTION_LABEL_STYLES,
   SECTIONS_GRID_STYLES,
-  SECTION_TITLE_STYLES,
   SKELETON_GREETING_STYLES,
-  SKELETON_STAT_STYLES,
   SKELETON_SCORE_STYLES,
-  SKELETON_WEAK_TOPICS_STYLES,
-  SKELETON_SECTION_TITLE_STYLES,
   SKELETON_SECTION_CARD_STYLES,
+  SKELETON_SECTION_LABEL_STYLES,
+  SKELETON_STAT_STYLES,
+  SKELETON_WEAK_TOPICS_STYLES,
+  STATS_GRID_STYLES,
+  WEAK_TOPICS_BLOCK_STYLES,
 } from './DashboardPage.styles';
 
 type DashboardSection = DashboardResponse['sections'][number];
 
-// note: weak_topics has no section_id, so it can't deep-link into topic practice yet without another backend field
+/** The dashboard payload carries the canonical name; the auth store is the
+ *  fallback when the session was restored without a fresh dashboard fetch. */
+function resolveFirstName(user: User | null, dashboardFullName: string): string {
+  if (!dashboardFullName.trim()) {
+    return getFirstName(user);
+  }
+
+  return getFirstName({ ...user, full_name: dashboardFullName } as User);
+}
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
-  const clearUser = useAuthStore((state) => state.clearUser);
-  const resetPracticeSession = usePracticeSessionStore((state) => state.resetSession);
-  const clearResults = useResultsStore((state) => state.clearResults);
+  const showToast = useAppShellStore((state) => state.showToast);
+  const [startingTopicId, setStartingTopicId] = useState<number | null>(null);
 
   const {
     data: dashboard,
     isLoading,
     error,
+    refetch,
   } = useQuery({
     queryKey: queryKeys.dashboard.all,
     queryFn: getDashboard,
   });
 
-  const [activeSection, setActiveSection] = useState<DashboardSection | null>(null);
-  const [modalKey, setModalKey] = useState(0);
-
-  const handleOpenSection = (section: DashboardSection) => {
-    setActiveSection(section);
-    setModalKey((key) => key + 1);
+  const handleSelectSection = (section: DashboardSection) => {
+    navigate(practicePath.subject(section.name));
   };
 
-  const handleLogout = async () => {
+  /* The one-click deep link the weak-topic card offers. It has to select the
+     section first: topic mode resolves `topic_id` as a position *within the
+     student's currently selected section*, so skipping this would happily
+     start the same position in whichever section was selected last — a
+     different topic entirely. Elsewhere PracticeHomePage does this
+     registration, but the dashboard bypasses that screen. */
+  const handlePracticeWeakTopic = async (topic: WeakTopic) => {
+    if (topic.section_id === null || topic.practice_topic_id === null) {
+      return;
+    }
+
+    setStartingTopicId(topic.topic_id);
+
     try {
-      await logout();
+      await selectSection(topic.section_id);
+      await startPractice({ mode: 'topic', topic_id: topic.practice_topic_id });
+      navigate(practicePath.session());
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 409) {
+        // An unfinished session blocks a new one; the practice screens own
+        // the resume/discard choice, so just say so rather than duplicating it.
+        showToast(SESSION_CONFLICT_MESSAGE);
+        return;
+      }
+
+      showToast(getApiErrorDetail(err) || START_ERROR_MESSAGE);
     } finally {
-      clearUser();
-      resetPracticeSession();
-      clearResults();
-      queryClient.removeQueries({ queryKey: queryKeys.auth.user });
-      queryClient.removeQueries({ queryKey: queryKeys.dashboard.all });
-      navigate(ROUTES.LOGIN);
+      setStartingTopicId(null);
     }
   };
 
@@ -111,7 +145,7 @@ export function DashboardPage() {
         </div>
         <Skeleton className={SKELETON_SCORE_STYLES} />
         <Skeleton className={SKELETON_WEAK_TOPICS_STYLES} />
-        <Skeleton className={SKELETON_SECTION_TITLE_STYLES} />
+        <Skeleton className={SKELETON_SECTION_LABEL_STYLES} />
         <div className={SECTIONS_GRID_STYLES}>
           <Skeleton className={SKELETON_SECTION_CARD_STYLES} />
           <Skeleton className={SKELETON_SECTION_CARD_STYLES} />
@@ -120,108 +154,112 @@ export function DashboardPage() {
     );
   }
 
-  if (error) {
-    const message = getApiErrorDetail(error);
-
+  if (error || !dashboard) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-6 text-center">
-        <p className="max-w-xl text-balance text-lg font-medium text-foreground">{message}</p>
+      <div className={CONTAINER_STYLES}>
+        <div className={ERROR_PANEL_STYLES}>
+          <p className={ERROR_MESSAGE_STYLES}>{getApiErrorDetail(error)}</p>
+          <Button size="sm" onClick={() => refetch()}>
+            {ERROR_RETRY_LABEL}
+          </Button>
+        </div>
       </div>
     );
   }
 
-  if (!dashboard) {
-    return null;
-  }
+  const { progress, sections, estimated_score } = dashboard;
+  const hasAttempts = progress.questions_answered > 0;
+  const trend = progress.accuracy_trend_percentage;
 
   return (
     <div className={CONTAINER_STYLES}>
-      {user?.email_verified === false && <EmailVerificationBanner />}
-
-      <div className={HEADER_ROW_STYLES}>
-        <div>
-          <p className={GREETING_EYEBROW_STYLES}>{GREETING_EYEBROW}</p>
-          <h1 className={GREETING_STYLES}>
-            {GREETING_PREFIX}
-            {dashboard.student.full_name}
-            {GREETING_EXCLAMATION}
-          </h1>
+      {user?.email_verified === false && (
+        <div className={BANNER_WRAPPER_STYLES}>
+          <EmailVerificationBanner />
         </div>
+      )}
 
-        <div className={HEADER_ACTIONS_STYLES}>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={SETTINGS_BUTTON_STYLES}
-            aria-label={SETTINGS_LABEL}
-            title={SETTINGS_LABEL}
-            onClick={() => navigate(ROUTES.SETTINGS)}
-          >
-            <SettingsIcon className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={LOGOUT_BUTTON_STYLES}
-            aria-label={LOGOUT_LABEL}
-            title={LOGOUT_LABEL}
-            onClick={handleLogout}
-          >
-            <LogOut className="size-4" />
-          </Button>
-        </div>
+      <div className={GREETING_BLOCK_STYLES}>
+        <p className={GREETING_EYEBROW_STYLES}>{getTimeOfDayGreeting()}</p>
+        <h1 className={GREETING_STYLES}>
+          {GREETING_PREFIX}
+          {resolveFirstName(user, dashboard.student.full_name)}
+          {GREETING_SUFFIX}
+        </h1>
       </div>
 
       <div className={STATS_GRID_STYLES}>
         <StatCard
           label={QUESTIONS_CORRECT_LABEL}
-          value={dashboard.progress.questions_correct}
-          icon={CheckCircle2}
-          subtext={`${QUESTIONS_CORRECT_SUBTEXT_PREFIX}${dashboard.progress.questions_answered}${QUESTIONS_CORRECT_SUBTEXT_SUFFIX}`}
+          value={progress.questions_correct}
+          icon={Check}
+          tone="success"
+          caption={`${QUESTIONS_CORRECT_CAPTION_PREFIX}${progress.questions_answered}${QUESTIONS_CORRECT_CAPTION_SUFFIX}`}
         />
         <StatCard
           label={TESTS_TAKEN_LABEL}
-          value={dashboard.progress.sessions_completed}
-          icon={ClipboardList}
-          subtext={`${TESTS_TAKEN_SUBTEXT_PREFIX}${dashboard.progress.avg_session_minutes}${TESTS_TAKEN_SUBTEXT_SUFFIX}`}
+          value={progress.sessions_completed}
+          icon={ChartNoAxesColumn}
+          tone="math"
+          caption={`${TESTS_TAKEN_CAPTION_PREFIX}${progress.avg_session_minutes}${TESTS_TAKEN_CAPTION_SUFFIX}`}
         />
         <StatCard
           label={ACCURACY_LABEL}
-          value={`${dashboard.progress.accuracy_percentage}${PERCENT_SUFFIX}`}
+          value={`${progress.accuracy_percentage}${PERCENT_SUFFIX}`}
           icon={TrendingUp}
-          subtext={`${dashboard.progress.accuracy_trend_percentage >= 0 ? '+' : ''}${dashboard.progress.accuracy_trend_percentage}${ACCURACY_TREND_SUFFIX}`}
+          tone="reading"
+          caption={
+            trend === 0
+              ? ACCURACY_CAPTION_NO_TREND
+              : `${trend > 0 ? '+' : ''}${trend}${ACCURACY_CAPTION_SUFFIX}`
+          }
         />
         <StatCard
           label={DAY_STREAK_LABEL}
-          value={dashboard.progress.day_streak}
+          value={progress.day_streak}
           icon={Flame}
-          subtext={DAY_STREAK_SUBTEXT}
+          tone="streak"
+          caption={progress.day_streak > 0 ? DAY_STREAK_CAPTION : DAY_STREAK_CAPTION_EMPTY}
         />
       </div>
 
-      <EstimatedScoreCard estimatedScore={dashboard.estimated_score} />
-
-      <WeakTopicsList topics={dashboard.weak_topics} />
-
-      <div className="space-y-4">
-        <h2 className={SECTION_TITLE_STYLES}>{SECTIONS_TITLE}</h2>
-        <div className={SECTIONS_GRID_STYLES}>
-          {dashboard.sections.map((section) => (
-            <SectionCard key={section.section_id} section={section} onOpen={handleOpenSection} />
-          ))}
-        </div>
+      <div className={SCORE_BLOCK_STYLES}>
+        {hasAttempts ? (
+          <EstimatedScoreCard estimatedScore={estimated_score} />
+        ) : (
+          <div className={EMPTY_PANEL_STYLES}>
+            <p className={EMPTY_TITLE_STYLES}>{NO_ATTEMPTS_TITLE}</p>
+            <p className={EMPTY_MESSAGE_STYLES}>{NO_ATTEMPTS_MESSAGE}</p>
+          </div>
+        )}
       </div>
 
-      <PracticeModal
-        key={modalKey}
-        section={activeSection}
-        open={activeSection !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setActiveSection(null);
-          }
-        }}
-      />
+      {hasAttempts && (
+        <div className={WEAK_TOPICS_BLOCK_STYLES}>
+          <WeakTopicsCard
+            topics={dashboard.weak_topics}
+            onPractice={handlePracticeWeakTopic}
+            startingTopicId={startingTopicId}
+          />
+        </div>
+      )}
+
+      <p className={SECTION_LABEL_STYLES}>{SECTIONS_TITLE}</p>
+      {sections.length > 0 ? (
+        <div className={SECTIONS_GRID_STYLES}>
+          {sections.map((section) => (
+            <SectionCard
+              key={section.section_id}
+              section={section}
+              onSelect={handleSelectSection}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className={EMPTY_PANEL_STYLES}>
+          <p className={EMPTY_MESSAGE_STYLES}>{SECTIONS_EMPTY_MESSAGE}</p>
+        </div>
+      )}
     </div>
   );
 }

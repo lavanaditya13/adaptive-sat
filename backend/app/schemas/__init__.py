@@ -10,8 +10,6 @@ from app.schemas.auth import (
     ResendVerificationByEmailRequest,
     ForgotPasswordRequest,
     ResetPasswordRequest,
-    RefreshRequest,
-    RefreshResponse,
 )
 from app.schemas.settings import ConnectedProviderItem, ConnectedProvidersResponse
 from app.schemas.practice import (
@@ -64,8 +62,6 @@ __all__ = [
     "ResendVerificationByEmailRequest",
     "ForgotPasswordRequest",
     "ResetPasswordRequest",
-    "RefreshRequest",
-    "RefreshResponse",
     "ConnectedProviderItem",
     "ConnectedProvidersResponse",
     "SectionSelectionRequest",

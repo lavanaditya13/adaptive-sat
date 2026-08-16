@@ -15,16 +15,23 @@ import {
   CARD_STYLES,
   TITLE_STYLES,
   SUBTITLE_STYLES,
+  OAUTH_SECTION_STYLES,
   formStyles,
+  FIELD_STYLES,
+  NAME_ROW_STYLES,
   inputStyles,
+  ERROR_STYLES,
+  RADIO_OPTION_STYLES,
   buttonStyles,
   linkStyles,
   noteStyles,
+  FOOTER_STYLES,
 } from './SignupForm.styles';
 import {
   TITLE,
   SUBTITLE,
-  FULL_NAME_LABEL,
+  FIRST_NAME_LABEL,
+  LAST_NAME_LABEL,
   EMAIL_LABEL,
   PASSWORD_LABEL,
   ROLE_LABEL,
@@ -36,6 +43,7 @@ import {
   ROLE_PARENT,
   ROLE_TUTOR,
   ROLE_NOTE,
+  SIGNUP_ERROR_TITLE,
 } from './SignupForm.constants';
 
 export function SignupForm() {
@@ -58,7 +66,7 @@ export function SignupForm() {
       navigate(`${ROUTES.CHECK_EMAIL}?email=${encodeURIComponent(user.email)}`);
     } catch (error) {
       toast({
-        title: 'Signup failed',
+        title: SIGNUP_ERROR_TITLE,
         description: getApiErrorDetail(error),
         variant: 'destructive',
       });
@@ -70,41 +78,49 @@ export function SignupForm() {
       <h1 className={TITLE_STYLES}>{TITLE}</h1>
       <p className={SUBTITLE_STYLES}>{SUBTITLE}</p>
 
-      <div className="mt-6">
+      <div className={OAUTH_SECTION_STYLES}>
         <OAuthButtons intent="signup" />
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className={formStyles}>
-        <div className="space-y-2">
-          <Label htmlFor="full_name">{FULL_NAME_LABEL}</Label>
-          <Input id="full_name" {...register('full_name')} className={inputStyles} />
-          {errors.full_name && <p className="text-sm text-destructive">{errors.full_name.message}</p>}
+        <div className={NAME_ROW_STYLES}>
+          <div className={FIELD_STYLES}>
+            <Label htmlFor="first_name">{FIRST_NAME_LABEL}</Label>
+            <Input id="first_name" {...register('first_name')} className={inputStyles} />
+            {errors.first_name && <p className={ERROR_STYLES}>{errors.first_name.message}</p>}
+          </div>
+
+          <div className={FIELD_STYLES}>
+            <Label htmlFor="last_name">{LAST_NAME_LABEL}</Label>
+            <Input id="last_name" {...register('last_name')} className={inputStyles} />
+            {errors.last_name && <p className={ERROR_STYLES}>{errors.last_name.message}</p>}
+          </div>
         </div>
 
-        <div className="space-y-2">
+        <div className={FIELD_STYLES}>
           <Label htmlFor="email">{EMAIL_LABEL}</Label>
           <Input id="email" type="email" {...register('email')} className={inputStyles} />
-          {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+          {errors.email && <p className={ERROR_STYLES}>{errors.email.message}</p>}
         </div>
 
-        <div className="space-y-2">
+        <div className={FIELD_STYLES}>
           <Label htmlFor="password">{PASSWORD_LABEL}</Label>
           <Input id="password" type="password" {...register('password')} className={inputStyles} />
-          {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
+          {errors.password && <p className={ERROR_STYLES}>{errors.password.message}</p>}
         </div>
 
-        <div className="space-y-2">
+        <div className={FIELD_STYLES}>
           <Label>{ROLE_LABEL}</Label>
           <RadioGroup defaultValue="student" {...register('role')}>
-            <div className="flex items-center space-x-2">
+            <div className={RADIO_OPTION_STYLES}>
               <RadioGroupItem value="student" id="student" />
               <Label htmlFor="student">{ROLE_STUDENT}</Label>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className={RADIO_OPTION_STYLES}>
               <RadioGroupItem value="parent" id="parent" />
               <Label htmlFor="parent">{ROLE_PARENT}</Label>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className={RADIO_OPTION_STYLES}>
               <RadioGroupItem value="tutor" id="tutor" />
               <Label htmlFor="tutor">{ROLE_TUTOR}</Label>
             </div>
@@ -117,7 +133,7 @@ export function SignupForm() {
         </Button>
       </form>
 
-      <p className="mt-4 text-center text-sm text-muted-foreground">
+      <p className={FOOTER_STYLES}>
         {HAS_ACCOUNT}{' '}
         <button type="button" onClick={() => navigate(ROUTES.LOGIN)} className={linkStyles}>
           {LOGIN_LINK}

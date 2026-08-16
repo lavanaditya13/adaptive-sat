@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.constants import IDEMPOTENCY_KEY_HEADER, IdempotentEndpoint
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
@@ -12,17 +13,24 @@ from app.schemas.practice import (
     PracticeStartResponse,
     SectionSelectionRequest,
     SectionSelectionResponse,
+    SkillTreeResponse,
     SubmitAnswerRequest,
     SubmitAnswerResponse,
+    UpdateAttemptRequest,
+    UpdateAttemptResponse,
 )
+from app.services.idempotency_service import compute_request_fingerprint, run_idempotent
 from app.services.practice_service import (
     abandon_practice_session,
     complete_practice_session,
     get_current_question,
+    get_latest_session_result,
     get_next_question,
+    get_skill_tree,
     set_selected_section,
     start_practice_session,
     submit_answer,
+    update_attempt_answer,
 )
 
 router = APIRouter()
@@ -42,8 +50,17 @@ async def start_practice(
     request: PracticeStartRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias=IDEMPOTENCY_KEY_HEADER),
 ):
-    return await start_practice_session(db=db, request=request, student=current_user)
+    return await run_idempotent(
+        db,
+        student_id=current_user.id,
+        endpoint=IdempotentEndpoint.PRACTICE_START,
+        idempotency_key=idempotency_key,
+        request_fingerprint=compute_request_fingerprint(request),
+        response_model=PracticeStartResponse,
+        execute=lambda: start_practice_session(db=db, request=request, student=current_user),
+    )
 
 
 @router.post("/abandon", response_model=PracticeAbandonResponse)
@@ -54,13 +71,31 @@ async def abandon_session(
     return await abandon_practice_session(db=db, student=current_user)
 
 
+@router.get("/skill-tree", response_model=SkillTreeResponse)
+async def skill_tree(
+    section: str | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_skill_tree(db=db, student=current_user, section=section)
+
+
 @router.post("/answer", response_model=SubmitAnswerResponse)
 async def answer_question(
     request: SubmitAnswerRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias=IDEMPOTENCY_KEY_HEADER),
 ):
-    return await submit_answer(db=db, student=current_user, request=request)
+    return await run_idempotent(
+        db,
+        student_id=current_user.id,
+        endpoint=IdempotentEndpoint.PRACTICE_ANSWER,
+        idempotency_key=idempotency_key,
+        request_fingerprint=compute_request_fingerprint(request),
+        response_model=SubmitAnswerResponse,
+        execute=lambda: submit_answer(db=db, student=current_user, request=request),
+    )
 
 
 @router.get("/question", response_model=PracticeQuestionResponse)
@@ -86,3 +121,26 @@ async def complete_session(
     db: AsyncSession = Depends(get_db),
 ):
     return await complete_practice_session(db=db, student=current_user)
+
+
+@router.get("/results/latest", response_model=PracticeCompleteResponse)
+async def latest_result(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Most recently completed session's summary. 404s when the student has
+    never finished one, which the Results tab renders as its empty state.
+    """
+    return await get_latest_session_result(db=db, student=current_user)
+
+
+@router.put("/attempts/{attempt_id}", response_model=UpdateAttemptResponse)
+async def update_attempt(
+    attempt_id: int,
+    request: UpdateAttemptRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await update_attempt_answer(
+        db=db, student=current_user, attempt_id=attempt_id, request=request
+    )

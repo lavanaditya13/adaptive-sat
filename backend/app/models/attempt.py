@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -14,8 +14,26 @@ if TYPE_CHECKING:
     from app.models.question import Question
 
 
+# The question runner asks the student to self-rate confidence on a 1-5
+# scale (default 3). Named here rather than inlined in the constraint so
+# tests can assert against the same bounds the model enforces. Migration
+# d4f2a7c1b8e5 repeats the literals deliberately — migrations have to keep
+# working against the schema as it was, not follow this constant if it moves.
+CONFIDENCE_MIN = 1
+CONFIDENCE_MAX = 5
+CONFIDENCE_CHECK_CONSTRAINT_NAME = "ck_attempts_confidence_level_range"
+
+
 class Attempt(Base):
     __tablename__ = "attempts"
+
+    __table_args__ = (
+        CheckConstraint(
+            f"confidence_level IS NULL "
+            f"OR (confidence_level >= {CONFIDENCE_MIN} AND confidence_level <= {CONFIDENCE_MAX})",
+            name=CONFIDENCE_CHECK_CONSTRAINT_NAME,
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -60,6 +78,9 @@ class Attempt(Base):
         nullable=True,
     )
 
+    # Student's self-rated confidence for this question, 1-5. Nullable:
+    # attempts recorded before the confidence prompt existed have none, and
+    # clients that don't send one still submit successfully.
     confidence_level: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
