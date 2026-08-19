@@ -74,6 +74,9 @@ IDEMPOTENCY_KEY_REUSED_DETAIL = (
 SESSION_ALREADY_IN_PROGRESS_DETAIL = (
     "A practice session is already in progress for this student."
 )
+ADAPTIVE_MODE_LOCKED_DETAIL = (
+    "Complete more section practice sessions before starting adaptive practice."
+)
 
 # --- Section codes -----------------------------------------------------------
 # Same two values as sections.name / practice_service.SECTION_CODES, but that

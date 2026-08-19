@@ -339,6 +339,38 @@ async def get_section_skill_tree(
     )
 
 
+async def get_weakest_skills(
+    db: AsyncSession,
+    student_id: int,
+    section_code: str,
+    limit: int,
+) -> list[dict]:
+    """Ranks a section's (topic, skill) pairs weakest first by BKT
+    mastery_score, for adaptive question selection.
+
+    Built on get_section_skill_tree rather than a separate query, so this
+    can never disagree with what the mastery view itself reports for the
+    same student/section -- just flattened out of the domain -> skill tree
+    into a ranked list. `topic_id` here is the tree's 1-based section
+    position (matching every other public `topic_id`), not the Topic
+    primary key -- see practice_service._load_section_topic_rows to
+    resolve one to the other.
+    """
+    tree = await get_section_skill_tree(db=db, student_id=student_id, section_code=section_code)
+
+    flattened = [
+        {
+            "topic_id": domain["topic_id"],
+            "skill": skill["name"],
+            "mastery_score": skill["mastery_score"],
+        }
+        for domain in tree
+        for skill in domain["skills"]
+    ]
+
+    return sorted(flattened, key=lambda row: row["mastery_score"])[:limit]
+
+
 def compute_avg_session_minutes(
     total_time_spent_seconds: int,
     sessions_completed: int,

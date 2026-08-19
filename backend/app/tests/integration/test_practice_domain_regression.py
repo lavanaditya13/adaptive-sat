@@ -313,6 +313,226 @@ async def test_adaptive_unlock_after_three_completed_section_sessions(student, s
 
 
 @pytest.mark.asyncio
+async def test_adaptive_mode_requires_a_selected_section(student, seeded_questions):
+    async with _request_scoped_session() as db:
+        with pytest.raises(HTTPException) as exc_info:
+            await practice_service.start_practice_session(
+                db, PracticeStartRequest(mode="adaptive", question_count=2), student,
+            )
+
+    assert exc_info.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_adaptive_mode_is_blocked_before_the_unlock_gate_clears(student, seeded_questions):
+    """set_selected_section's is_locked flag is display-only -- the adaptive
+    branch of start_practice_session has to enforce the gate itself, or a
+    direct API call bypasses it entirely regardless of what the UI shows."""
+    await _select_math_section(student)
+
+    async with _request_scoped_session() as db:
+        with pytest.raises(HTTPException) as exc_info:
+            await practice_service.start_practice_session(
+                db, PracticeStartRequest(mode="adaptive", question_count=2), student,
+            )
+
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_adaptive_mode_only_pulls_questions_from_the_selected_section(
+    student, seeded_questions, cleanup_after
+):
+    """get_weakest_skills is scoped by section_code -- a topic the student
+    is weak in belonging to a DIFFERENT section must never influence (or
+    appear as a question source in) this section's adaptive session.
+    Regression coverage for the "adaptive read progress globally, not
+    scoped to the selected section" gap.
+    """
+    async with SessionLocal() as db:
+        rw_topic = Topic(
+            code=f"ADAPTIVE_RW_{uuid.uuid4().hex[:8]}",
+            name=f"Adaptive RW Weak Topic {uuid.uuid4().hex[:8]}",
+        )
+        db.add(rw_topic)
+        await db.flush()
+        cleanup_after.append((Topic, rw_topic.id))
+
+        rw_question = Question(
+            section="reading_writing", prompt=f"Adaptive RW Weak Q {uuid.uuid4().hex[:8]}",
+            choices=CHOICES, correct_answer=CORRECT_ANSWER, difficulty="medium",
+            topic_id=rw_topic.id,
+        )
+        db.add(rw_question)
+        await db.flush()
+
+        rw_session = PracticeSession(
+            student_id=student.id, section_id=2, mode="section",
+            status="completed", question_count=1,
+        )
+        db.add(rw_session)
+        await db.flush()
+        db.add(
+            Attempt(
+                practice_session_id=rw_session.id, student_id=student.id,
+                question_id=rw_question.id, topic_id=rw_topic.id,
+                selected_answer=WRONG_ANSWER, correct_answer=CORRECT_ANSWER, is_correct=False,
+            )
+        )
+        await db.commit()
+
+    await _select_math_section(student)
+
+    for _ in range(3):
+        await _run_full_section_session(student)
+
+    async with _request_scoped_session() as db:
+        await practice_service.start_practice_session(
+            db, PracticeStartRequest(mode="adaptive", question_count=2), student,
+        )
+
+    async with SessionLocal() as db:
+        chosen_sections = (
+            await db.execute(
+                select(Question.section)
+                .join(PracticeSessionQuestion, PracticeSessionQuestion.question_id == Question.id)
+                .join(PracticeSession, PracticeSession.id == PracticeSessionQuestion.practice_session_id)
+                .where(PracticeSession.student_id == student.id, PracticeSession.mode == "adaptive")
+            )
+        ).scalars().all()
+
+    assert chosen_sections
+    assert all(section == "math" for section in chosen_sections)
+
+
+@pytest.mark.asyncio
+async def test_adaptive_order_expression_skews_selection_toward_the_weaker_topic(
+    student, cleanup_after
+):
+    """Weighted-random selection (practice_service._adaptive_order_expression)
+    should draw most of a draw from the weaker of two targets, not
+    distribute evenly -- this is what makes "adaptive" mean something
+    beyond a plain shuffle.
+
+    Exercises the SQL expression directly against real Postgres (weighted
+    sampling only means something under a real random()) with an explicit
+    weakest_skills list built from get_weakest_skills' own real output,
+    rather than going through start_practice_session end-to-end: Topic/
+    Question rows aren't truncated between tests (see conftest), so the
+    section's full curriculum can accumulate other tests' untouched
+    scratch topics tied at mastery_score 0 -- legitimately "just as weak"
+    from get_weakest_skills' point of view, but they'd crowd this test's
+    two topics out of a small top-N and make it flaky through the full
+    pipeline. Isolating the expression itself keeps this test about the
+    weighting mechanism, not the section's incidental curriculum size.
+    """
+    async with SessionLocal() as db:
+        weak_topic = Topic(
+            code=f"ADAPTIVE_WEAK_{uuid.uuid4().hex[:8]}",
+            name=f"Adaptive Weak Topic {uuid.uuid4().hex[:8]}",
+        )
+        strong_topic = Topic(
+            code=f"ADAPTIVE_STRONG_{uuid.uuid4().hex[:8]}",
+            name=f"Adaptive Strong Topic {uuid.uuid4().hex[:8]}",
+        )
+        db.add_all([weak_topic, strong_topic])
+        await db.flush()
+        cleanup_after.append((Topic, weak_topic.id))
+        cleanup_after.append((Topic, strong_topic.id))
+
+        weak_questions = []
+        strong_questions = []
+        for i in range(10):
+            weak_question = Question(
+                section="math", prompt=f"Adaptive Weak Q{i} {uuid.uuid4().hex[:8]}",
+                choices=CHOICES, correct_answer=CORRECT_ANSWER, difficulty="medium",
+                topic_id=weak_topic.id,
+            )
+            strong_question = Question(
+                section="math", prompt=f"Adaptive Strong Q{i} {uuid.uuid4().hex[:8]}",
+                choices=CHOICES, correct_answer=CORRECT_ANSWER, difficulty="medium",
+                topic_id=strong_topic.id,
+            )
+            db.add_all([weak_question, strong_question])
+            weak_questions.append(weak_question)
+            strong_questions.append(strong_question)
+        await db.flush()
+
+        # Mastery gap: one wrong answer on weak_topic, a sustained correct
+        # run on strong_topic -- BKT reads these far enough apart that the
+        # weight ratio (see _adaptive_order_expression) heavily favors weak.
+        weak_session = PracticeSession(
+            student_id=student.id, section_id=MATH_SECTION_ID, mode="section",
+            status="completed", question_count=1,
+        )
+        db.add(weak_session)
+        await db.flush()
+        db.add(
+            Attempt(
+                practice_session_id=weak_session.id, student_id=student.id,
+                question_id=weak_questions[0].id, topic_id=weak_topic.id,
+                selected_answer=WRONG_ANSWER, correct_answer=CORRECT_ANSWER, is_correct=False,
+            )
+        )
+
+        for _ in range(5):
+            strong_session = PracticeSession(
+                student_id=student.id, section_id=MATH_SECTION_ID, mode="section",
+                status="completed", question_count=1,
+            )
+            db.add(strong_session)
+            await db.flush()
+            db.add(
+                Attempt(
+                    practice_session_id=strong_session.id, student_id=student.id,
+                    question_id=strong_questions[0].id, topic_id=strong_topic.id,
+                    selected_answer=CORRECT_ANSWER, correct_answer=CORRECT_ANSWER, is_correct=True,
+                )
+            )
+
+        await db.commit()
+
+    async with SessionLocal() as db:
+        section_topics = await practice_service._load_section_topic_rows(
+            db=db, section_code="math"
+        )
+        positions_by_topic_id = {
+            topic.id: position for position, topic in enumerate(section_topics, start=1)
+        }
+
+        ranked = await skill_scoring_service.get_weakest_skills(
+            db=db, student_id=student.id, section_code="math", limit=len(section_topics)
+        )
+        weak_row = next(
+            row for row in ranked if row["topic_id"] == positions_by_topic_id[weak_topic.id]
+        )
+        strong_row = next(
+            row for row in ranked if row["topic_id"] == positions_by_topic_id[strong_topic.id]
+        )
+        assert weak_row["mastery_score"] < strong_row["mastery_score"]
+
+        order_expression = practice_service._adaptive_order_expression(
+            [weak_row, strong_row], section_topics
+        )
+
+        chosen_topic_ids = (
+            await db.execute(
+                select(Question.topic_id)
+                .where(Question.topic_id.in_([weak_topic.id, strong_topic.id]))
+                .order_by(order_expression)
+                .limit(10)
+            )
+        ).scalars().all()
+
+    weak_count = sum(1 for topic_id in chosen_topic_ids if topic_id == weak_topic.id)
+
+    assert len(chosen_topic_ids) == 10
+    # Weighted, not guaranteed -- 8/10 leaves a wide, low-flake margin
+    # against the large weight gap this fixture sets up.
+    assert weak_count >= 8
+
+
+@pytest.mark.asyncio
 async def test_concurrent_submit_answer_does_not_double_count_or_skip(student, seeded_questions):
     """Two overlapping submit_answer calls for the same session (a
     double-clicked "Next", or a retried request) used to both read the same

@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import func, select, update
+from sqlalchemy import ColumnElement, case, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import settings
 from app.core.constants import (
     ACTIVE_PRACTICE_SESSION_STATUSES,
+    ADAPTIVE_MODE_LOCKED_DETAIL,
     PRACTICE_SESSION_QUESTION_STATUS_ANSWERED,
     PRACTICE_SESSION_QUESTION_STATUS_ASSIGNED,
     SESSION_ALREADY_IN_PROGRESS_DETAIL,
@@ -54,9 +55,10 @@ from app.services.recommendation_service import generate_study_plan_for_student
 from app.services.skill_scoring_service import (
     MASTERY_ACCURACY_PERCENT,
     MASTERY_MIN_QUESTIONS,
+    UNCATEGORIZED_SKILL_NAME,
     classify_mistake_type,
     get_section_skill_tree,
-    get_student_progress,
+    get_weakest_skills,
 )
 
 
@@ -75,6 +77,27 @@ SECTION_DISPLAY_NAMES = {
 # unlocks for that section. Checked both when a section is selected (to show
 # lock status) and when a session completes (to report a fresh unlock state).
 REQUIRED_SECTION_SESSIONS_FOR_ADAPTIVE_UNLOCK = 3
+
+# How many of the section's weakest (topic, skill) pairs an adaptive session
+# spreads its questions across, rather than exhausting a single weakest
+# topic before touching anything else.
+ADAPTIVE_TARGET_SKILL_COUNT = 4
+
+# Maps a (topic, skill) target's current BKT mastery_score (0-100) to the
+# difficulty band an adaptive session should lean toward there: low
+# mastery rebuilds confidence on easier questions, higher (but still
+# below the mastery_threshold -- a mastered skill isn't a selection
+# target to begin with) mastery stress-tests with harder ones.
+ADAPTIVE_EASY_BAND_MAX = 30
+ADAPTIVE_MEDIUM_BAND_MAX = 70
+
+# Selection is a weighted-random draw (see _adaptive_order_expression), not
+# a hard filter -- every question in the section stays a candidate, these
+# just tilt the odds. BASELINE is the weight for a question that matches
+# none of the weakest targets; DIFFICULTY_MATCH_BONUS multiplies a target's
+# weight again when a candidate's difficulty also matches that target's band.
+ADAPTIVE_BASELINE_WEIGHT = 1.0
+ADAPTIVE_DIFFICULTY_MATCH_BONUS = 2.0
 
 
 def _section_code_for_id(section_id: int) -> str:
@@ -461,6 +484,63 @@ async def _load_question_with_topic(
     return question
 
 
+def _target_difficulty_for_mastery(mastery_score: int) -> str:
+    if mastery_score < ADAPTIVE_EASY_BAND_MAX:
+        return "easy"
+    if mastery_score < ADAPTIVE_MEDIUM_BAND_MAX:
+        return "medium"
+    return "hard"
+
+
+def _adaptive_order_expression(
+    weakest_skills: list[dict],
+    section_topics: list[Topic],
+) -> ColumnElement[float]:
+    """A weighted-random ORDER BY expression that skews question selection
+    toward the section's weakest (topic, skill) targets, without excluding
+    anything else outright.
+
+    Uses the Efraimidis-Spirakis algorithm for weighted random sampling
+    without replacement: for weight w and u ~ Uniform(0, 1), ln(u) / w
+    grows larger (less negative) on average as w grows, so ordering by it
+    descending and taking the top N is a proper weighted sample, in plain
+    SQL, with no extra passes or extensions -- the two existing
+    fresh/fallback queries below just need this in their ORDER BY instead
+    of bare random() for section/topic-mode's plain shuffle.
+
+    Every question in the section stays a candidate (see ADAPTIVE_BASELINE_
+    WEIGHT on the fallback branch of the CASE below) — this tilts the odds,
+    it doesn't filter, so a session can still fill out from elsewhere when
+    a weak target has too few questions of its own to reach question_count.
+    """
+    weight_cases = []
+
+    for row in weakest_skills:
+        topic = section_topics[row["topic_id"] - 1]
+        weight = max(100 - row["mastery_score"], 1)
+        target_difficulty = _target_difficulty_for_mastery(row["mastery_score"])
+
+        skill_match = (
+            Question.skill == row["skill"]
+            if row["skill"] != UNCATEGORIZED_SKILL_NAME
+            else Question.skill.is_(None)
+        )
+        topic_and_skill_match = (Question.topic_id == topic.id) & skill_match
+
+        # Listed before the bare topic/skill match: CASE takes the first
+        # matching WHEN, so the difficulty-boosted weight has to come
+        # first or it would never be reached.
+        weight_cases.append(
+            (topic_and_skill_match & (Question.difficulty == target_difficulty),
+             weight * ADAPTIVE_DIFFICULTY_MATCH_BONUS)
+        )
+        weight_cases.append((topic_and_skill_match, weight))
+
+    weight_expression = case(*weight_cases, else_=ADAPTIVE_BASELINE_WEIGHT)
+
+    return (func.ln(func.random()) / weight_expression).desc()
+
+
 async def start_practice_session(
     db: AsyncSession,
     request: PracticeStartRequest,
@@ -494,6 +574,9 @@ async def start_practice_session(
     topic_id_for_session: int | None = None
 
     question_query = select(Question).options(selectinload(Question.topic))
+    # Plain shuffle unless adaptive mode below finds weakest-skill targets
+    # to weight toward — section/topic mode never touch this.
+    order_expression: ColumnElement = func.random()
 
     if request.mode == "topic":
         if request.topic_id is None:
@@ -530,23 +613,36 @@ async def start_practice_session(
         )
 
     elif request.mode == "adaptive":
-        progress = await get_student_progress(db=db, student_id=student.id)
-        weakest_topics = progress.get("weakest_topics", [])
-
-        if weakest_topics:
-            weakest_topic_id = weakest_topics[0]["topic_id"]
-            topic_id_for_session = weakest_topic_id
-            question_query = question_query.where(Question.topic_id == weakest_topic_id)
-        else:
-            if selected_section_id is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Select a section before starting adaptive practice",
-                )
-
-            question_query = question_query.where(
-                Question.section == _section_code_for_id(selected_section_id)
+        if selected_section_id is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Select a section before starting adaptive practice",
             )
+
+        completed_section_sessions = await _count_completed_section_sessions(
+            db=db, student_id=student.id, section_id=selected_section_id
+        )
+
+        if completed_section_sessions < REQUIRED_SECTION_SESSIONS_FOR_ADAPTIVE_UNLOCK:
+            raise HTTPException(status_code=403, detail=ADAPTIVE_MODE_LOCKED_DETAIL)
+
+        section_code = _section_code_for_id(selected_section_id)
+        question_query = question_query.where(Question.section == section_code)
+
+        # topic_id_for_session stays None: an adaptive session spans
+        # several of the section's weakest topics/skills (see below), not
+        # one, so there's no single topic to attribute it to — same as
+        # section mode.
+        weakest_skills = await get_weakest_skills(
+            db=db,
+            student_id=student.id,
+            section_code=section_code,
+            limit=ADAPTIVE_TARGET_SKILL_COUNT,
+        )
+
+        if weakest_skills:
+            section_topics = await _load_section_topic_rows(db=db, section_code=section_code)
+            order_expression = _adaptive_order_expression(weakest_skills, section_topics)
 
     attempted_ids_sq = (
         select(Attempt.question_id)
@@ -560,7 +656,7 @@ async def start_practice_session(
 
     fresh_result = await db.execute(
         question_query.where(Question.id.not_in(attempted_ids_sq))
-        .order_by(func.random())
+        .order_by(order_expression)
         .limit(question_count)
     )
     questions = list(fresh_result.scalars().unique().all())
@@ -572,7 +668,7 @@ async def start_practice_session(
         )
         fallback_result = await db.execute(
             question_query.where(*supplement_filter)
-            .order_by(func.random())
+            .order_by(order_expression)
             .limit(question_count - len(questions))
         )
         questions.extend(list(fallback_result.scalars().unique().all()))
@@ -586,7 +682,7 @@ async def start_practice_session(
     session = PracticeSession(
         student_id=student.id,
         topic_id=topic_id_for_session,
-        section_id=selected_section_id if request.mode != "topic" else selected_section_id,
+        section_id=selected_section_id,
         title=f"{request.mode.title()} Practice Session",
         mode=request.mode,
         question_count=len(questions),
