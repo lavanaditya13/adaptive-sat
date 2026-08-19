@@ -340,3 +340,24 @@ def test_is_session_stale(created_at, last_attempt_at, expected_stale):
     assert (
         practice_service_module._is_session_stale(session, last_attempt_at) is expected_stale
     )
+
+
+# --- _target_difficulty_for_mastery (adaptive question selection) ----------
+
+
+@pytest.mark.parametrize(
+    "mastery_score, expected_difficulty",
+    [
+        (0, "easy"),
+        (29, "easy"),
+        (30, "medium"),
+        (69, "medium"),
+        (70, "hard"),
+        (100, "hard"),
+    ],
+)
+def test_target_difficulty_for_mastery_bands(mastery_score, expected_difficulty):
+    assert (
+        practice_service_module._target_difficulty_for_mastery(mastery_score)
+        == expected_difficulty
+    )

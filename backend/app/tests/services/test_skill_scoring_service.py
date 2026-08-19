@@ -16,6 +16,7 @@ from app.models.attempt import Attempt
 from app.models.practice_session import PracticeSession
 from app.models.question import Question
 from app.models.topic import Topic
+from app.services.practice_service import _load_section_topic_rows
 from app.services.skill_scoring_service import (
     classify_mistake_type,
     compute_accuracy_trend,
@@ -23,6 +24,7 @@ from app.services.skill_scoring_service import (
     compute_day_streak,
     compute_section_accuracy,
     get_student_progress,
+    get_weakest_skills,
 )
 
 CHOICES = {"A": "opt-a", "B": "opt-b", "C": "opt-c", "D": "opt-d"}
@@ -248,6 +250,67 @@ async def test_weakest_topics_ranking_is_not_dominated_by_a_single_lucky_or_unlu
 
     weakest_ids = [t["topic_id"] for t in progress["weakest_topics"]]
     assert weakest_ids.index(sustained_weak_topic.id) < weakest_ids.index(one_off_topic.id)
+
+
+@pytest.mark.asyncio
+async def test_get_weakest_skills_ranks_by_mastery_score(student, cleanup_after):
+    """The section's math curriculum is shared across tests (Topic/Question
+    aren't truncated -- see conftest's _reset_student_state), so this
+    resolves each of its own two topics' section-position rather than
+    assuming they land at a fixed rank among however many other topics
+    happen to exist, and only compares those two rows against each other.
+    """
+    async with SessionLocal() as db:
+        weak_topic = Topic(
+            code=f"WEAKEST_SKILL_{uuid.uuid4().hex[:8]}",
+            name=f"Weakest Skill Topic {uuid.uuid4().hex[:8]}",
+        )
+        strong_topic = Topic(
+            code=f"STRONGEST_SKILL_{uuid.uuid4().hex[:8]}",
+            name=f"Strongest Skill Topic {uuid.uuid4().hex[:8]}",
+        )
+        db.add_all([weak_topic, strong_topic])
+        await db.flush()
+        cleanup_after.append((Topic, weak_topic.id))
+        cleanup_after.append((Topic, strong_topic.id))
+
+        weak_question = Question(
+            section="math", prompt=f"Weakest Skill Q {uuid.uuid4().hex[:8]}", choices=CHOICES,
+            correct_answer="A", difficulty="medium", topic_id=weak_topic.id,
+        )
+        strong_question = Question(
+            section="math", prompt=f"Strongest Skill Q {uuid.uuid4().hex[:8]}", choices=CHOICES,
+            correct_answer="A", difficulty="medium", topic_id=strong_topic.id,
+        )
+        db.add_all([weak_question, strong_question])
+        await db.flush()
+
+        # One wrong answer on weak_topic; a sustained correct run on
+        # strong_topic -- BKT should read these apart clearly.
+        await _seed_attempt(
+            db, student_id=student.id, topic_id=weak_topic.id,
+            question_id=weak_question.id, is_correct=False,
+        )
+        for _ in range(5):
+            await _seed_attempt(
+                db, student_id=student.id, topic_id=strong_topic.id,
+                question_id=strong_question.id, is_correct=True,
+            )
+
+        await db.commit()
+
+    async with SessionLocal() as db:
+        section_topics = await _load_section_topic_rows(db=db, section_code="math")
+        ranked = await get_weakest_skills(
+            db=db, student_id=student.id, section_code="math", limit=len(section_topics)
+        )
+
+    positions_by_topic_id = {topic.id: position for position, topic in enumerate(section_topics, start=1)}
+    weak_row = next(row for row in ranked if row["topic_id"] == positions_by_topic_id[weak_topic.id])
+    strong_row = next(row for row in ranked if row["topic_id"] == positions_by_topic_id[strong_topic.id])
+
+    assert weak_row["mastery_score"] < strong_row["mastery_score"]
+    assert ranked.index(weak_row) < ranked.index(strong_row)
 
 
 @pytest.mark.asyncio
