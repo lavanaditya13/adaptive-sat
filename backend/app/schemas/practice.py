@@ -61,8 +61,9 @@ class DashboardWeakTopicResponse(BaseModel):
     # practice endpoints take — see practice_topic_id below.
     topic_id: int
     display_name: str
-    # Accuracy over this topic, 0-100. Named "mastery" for the dashboard's
-    # sake; it is the same number the skill tree reports as `accuracy`.
+    # The BKT mastery estimate (mastery_model.py) for this topic, 0-100 —
+    # the same model the skill tree's `mastery_score` reports, not the
+    # plain accuracy percentage.
     mastery_score: float
     questions_attempted: int
     questions_correct: int
@@ -234,6 +235,12 @@ class SkillNodeResponse(_SkillTreeNode):
     questions_attempted: int
     questions_correct: int
     mastered: bool
+    # Bayesian Knowledge Tracing p(know) estimate (mastery_model.py),
+    # 0-100 to match `accuracy`'s convention — what `mastered` is actually
+    # thresholded on. `accuracy` stays the plain, unweighted
+    # correct/attempted percentage for familiarity; this is the number
+    # behind the boolean.
+    mastery_score: int
 
 
 class DomainNodeResponse(_SkillTreeNode):
@@ -247,12 +254,20 @@ class DomainNodeResponse(_SkillTreeNode):
     questions_attempted: int
     questions_correct: int
     mastered: bool
+    mastery_score: int
     skills: list[SkillNodeResponse] = []
 
 
 class MasteryRuleResponse(_SkillTreeNode):
     accuracy: int
     min_questions: int
+    # Names the live rule (mastery_model.py) so a client/docs reader isn't
+    # left assuming `accuracy`/`min_questions` alone describe it — they're
+    # a legible legacy-equivalent, not the literal computation anymore.
+    model: str
+    # The p(know) a node's Bayesian Knowledge Tracing estimate must clear
+    # to read as `mastered` — see mastery_model.BktParameters.mastery_threshold.
+    mastery_threshold: float
 
 
 class SkillTreeResponse(_SkillTreeNode):

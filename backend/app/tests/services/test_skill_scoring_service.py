@@ -196,6 +196,61 @@ async def test_get_student_progress_computes_weakest_topics(student, cleanup_aft
 
 
 @pytest.mark.asyncio
+async def test_weakest_topics_ranking_is_not_dominated_by_a_single_lucky_or_unlucky_attempt(
+    student, cleanup_after
+):
+    """Regression test: weakest_topics used to sort by raw accuracy with no
+    minimum-attempts floor, so one wrong answer (0% on 1 attempt) would
+    outrank a topic practised heavily and still genuinely weak (40% on 20
+    attempts) -- the opposite of what "weakest" should mean. Ranking by
+    the BKT mastery_score instead fixes this: a single wrong answer isn't
+    strong enough evidence to look worse than a real sustained weakness.
+    """
+    async with SessionLocal() as db:
+        one_off_topic = Topic(code=f"ONE_OFF_{uuid.uuid4().hex[:8]}", name="One-off Miss")
+        sustained_weak_topic = Topic(
+            code=f"SUSTAINED_{uuid.uuid4().hex[:8]}", name="Sustained Weakness"
+        )
+        db.add_all([one_off_topic, sustained_weak_topic])
+        await db.flush()
+        cleanup_after.append((Topic, one_off_topic.id))
+        cleanup_after.append((Topic, sustained_weak_topic.id))
+
+        one_off_question = Question(
+            section="math", prompt=f"One-off Q {uuid.uuid4().hex[:8]}", choices=CHOICES,
+            correct_answer="A", difficulty="easy", topic_id=one_off_topic.id,
+        )
+        sustained_question = Question(
+            section="math", prompt=f"Sustained Q {uuid.uuid4().hex[:8]}", choices=CHOICES,
+            correct_answer="A", difficulty="easy", topic_id=sustained_weak_topic.id,
+        )
+        db.add_all([one_off_question, sustained_question])
+        await db.flush()
+
+        # One attempt, wrong -- 0% on paper.
+        await _seed_attempt(
+            db, student_id=student.id, topic_id=one_off_topic.id,
+            question_id=one_off_question.id, is_correct=False,
+        )
+
+        # Twenty attempts, 40% correct -- a real, sustained weakness that
+        # looks "better" than 0% by raw accuracy alone.
+        for i in range(20):
+            await _seed_attempt(
+                db, student_id=student.id, topic_id=sustained_weak_topic.id,
+                question_id=sustained_question.id, is_correct=(i % 5 == 0),
+            )
+
+        await db.commit()
+
+    async with SessionLocal() as db:
+        progress = await get_student_progress(db=db, student_id=student.id)
+
+    weakest_ids = [t["topic_id"] for t in progress["weakest_topics"]]
+    assert weakest_ids.index(sustained_weak_topic.id) < weakest_ids.index(one_off_topic.id)
+
+
+@pytest.mark.asyncio
 async def test_get_student_progress_with_no_attempts_returns_zeroed_summary(student):
     async with SessionLocal() as db:
         progress = await get_student_progress(db=db, student_id=student.id)

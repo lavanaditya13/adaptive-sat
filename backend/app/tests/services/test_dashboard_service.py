@@ -150,7 +150,10 @@ async def test_weak_topics_carry_a_resolvable_practice_deep_link(student, cleanu
 
     weak = next(t for t in dashboard.weak_topics if t.topic_id == topic.id)
 
-    assert weak.mastery_score == 0.0
+    # mastery_score is the BKT estimate (mastery_model.py), not raw
+    # accuracy -- one wrong answer leaves a small residual belief above
+    # zero rather than reading as exactly 0%, but it's still clearly weak.
+    assert 0.0 < weak.mastery_score < 50.0
     assert weak.questions_attempted == 1
     assert weak.questions_correct == 0
     assert weak.section == "math"
