@@ -7,12 +7,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.attempt import Attempt
 from app.models.question import Question
 from app.models.topic import Topic
+from app.services.mastery_model import (
+    MasteryAttemptInput,
+    get_parameters_for_skill,
+    weighted_mastery_score,
+)
 
-
-# A node counts as mastered at >= 85% accuracy over at least 10 attempted
-# questions. The minimum matters as much as the percentage: without it a
-# single lucky correct answer reads as 100% and a node flips to "mastered"
-# off one data point.
+# Roughly what the live Bayesian Knowledge Tracing model (mastery_model.py)
+# requires in the common case of a sustained run of correct answers —
+# reported in MasteryRuleResponse so clients/docs have a legible
+# equivalent, since "p(know) >= 0.9 under a slip/guess-aware HMM" doesn't
+# fit in a UI label. Not read by any scoring code below; the actual
+# threshold lives in mastery_model.DEFAULT_PARAMETERS.mastery_threshold.
 MASTERY_ACCURACY_PERCENT = 85
 MASTERY_MIN_QUESTIONS = 10
 
@@ -29,13 +35,6 @@ def accuracy_percent(correct: int, attempted: int) -> int:
         return 0
 
     return round(correct / attempted * 100)
-
-
-def is_mastered(correct: int, attempted: int) -> bool:
-    if attempted < MASTERY_MIN_QUESTIONS:
-        return False
-
-    return accuracy_percent(correct, attempted) >= MASTERY_ACCURACY_PERCENT
 
 
 def classify_mistake_type(
@@ -63,46 +62,56 @@ def classify_mistake_type(
 
 
 async def get_student_progress(db: AsyncSession, student_id: int) -> dict:
+    # Joined to Question for `difficulty` — one query, so the weighting
+    # below never issues a per-attempt lookup (see mastery_model.py).
     result = await db.execute(
-        select(Attempt).where(Attempt.student_id == student_id)
+        select(Attempt, Question.difficulty)
+        .join(Question, Question.id == Attempt.question_id)
+        .where(Attempt.student_id == student_id)
     )
 
-    attempts = result.scalars().all()
+    rows = result.all()
+    attempts = [attempt for attempt, _difficulty in rows]
 
     total_attempted = len(attempts)
     total_correct = sum(1 for attempt in attempts if attempt.is_correct)
     overall_accuracy = total_correct / total_attempted if total_attempted else 0
 
-    topic_stats = defaultdict(lambda: {"attempted": 0, "correct": 0})
+    topic_attempts: dict[int, list[MasteryAttemptInput]] = defaultdict(list)
 
-    for attempt in attempts:
-        topic_stats[attempt.topic_id]["attempted"] += 1
-
-        if attempt.is_correct:
-            topic_stats[attempt.topic_id]["correct"] += 1
+    for attempt, difficulty in rows:
+        topic_attempts[attempt.topic_id].append(
+            MasteryAttemptInput(
+                is_correct=attempt.is_correct,
+                difficulty=difficulty,
+                created_at=attempt.created_at,
+            )
+        )
 
     performance_by_topic = []
 
-    for topic_id, stats in topic_stats.items():
+    for topic_id, attempt_inputs in topic_attempts.items():
         topic = await db.get(Topic, topic_id)
-
-        attempted = stats["attempted"]
-        correct = stats["correct"]
-        accuracy = correct / attempted if attempted else 0
+        estimate = weighted_mastery_score(attempt_inputs)
 
         performance_by_topic.append(
             {
                 "topic_id": topic_id,
                 "topic_name": topic.name if topic else "Unknown Topic",
-                "attempted": attempted,
-                "correct": correct,
-                "accuracy": round(accuracy, 2),
+                "attempted": len(attempt_inputs),
+                "correct": sum(1 for a in attempt_inputs if a.is_correct),
+                "accuracy": round(estimate.raw_accuracy, 2),
+                "mastery_score": round(estimate.score, 2),
             }
         )
 
+    # Ranked by the weighted mastery score, not raw accuracy — a topic
+    # with one attempt at 0% no longer outranks one with 200 attempts at
+    # 40% just because it looks worse on paper; the weighting already
+    # accounts for how little a single attempt actually tells you.
     weakest_topics = sorted(
         performance_by_topic,
-        key=lambda topic: topic["accuracy"],
+        key=lambda topic: topic["mastery_score"],
     )[:3]
 
     return {
@@ -174,17 +183,20 @@ def _skill_sort_key(skill_name: str) -> tuple[int, str]:
 
 def build_skill_tree(
     curriculum_rows: list[tuple[int, str, str, str | None]],
-    attempt_rows: list[tuple[int, str | None, bool]],
+    attempt_rows: list[tuple[int, str | None, bool, str | None, datetime]],
 ) -> list[dict]:
     """Folds a section's question catalogue and a student's attempts into
     the domain -> skill accuracy tree.
 
     `curriculum_rows` are distinct (topic_id, topic_code, topic_name, skill)
     tuples covering every question in the section; `attempt_rows` are
-    (topic_id, skill, is_correct) tuples for that student's attempts in the
-    same section. The catalogue drives the shape, so domains and skills the
-    student has never touched still appear at 0% with 0 attempted — the UI
-    lists the whole curriculum, not just what's been practised.
+    (topic_id, skill, is_correct, difficulty, created_at) tuples for that
+    student's attempts in the same section — difficulty feeds the BKT
+    slip-rate weighting and created_at establishes attempt order, both fed
+    into the mastery estimate (mastery_model.py). The catalogue drives the
+    shape, so domains and skills the student has never touched still
+    appear at 0% with 0 attempted — the UI lists the whole curriculum, not
+    just what's been practised.
 
     Split out from get_section_skill_tree as a pure function so the folding
     rules can be tested without a database.
@@ -199,18 +211,21 @@ def build_skill_tree(
                 "name": topic_name,
                 "attempted": 0,
                 "correct": 0,
+                "attempts": [],
                 "skills": {},
             },
         )
 
     def _ensure_skill(domain: dict, skill_name: str) -> dict:
-        return domain["skills"].setdefault(skill_name, {"attempted": 0, "correct": 0})
+        return domain["skills"].setdefault(
+            skill_name, {"attempted": 0, "correct": 0, "attempts": []}
+        )
 
     for topic_id, topic_code, topic_name, skill in curriculum_rows:
         domain = _ensure_domain(topic_id, topic_code, topic_name)
         _ensure_skill(domain, skill or UNCATEGORIZED_SKILL_NAME)
 
-    for topic_id, skill, is_correct in attempt_rows:
+    for topic_id, skill, is_correct, difficulty, created_at in attempt_rows:
         domain = domains.get(topic_id)
 
         if domain is None:
@@ -219,9 +234,14 @@ def build_skill_tree(
             continue
 
         skill_stats = _ensure_skill(domain, skill or UNCATEGORIZED_SKILL_NAME)
+        attempt_input = MasteryAttemptInput(
+            is_correct=is_correct, difficulty=difficulty, created_at=created_at
+        )
 
         domain["attempted"] += 1
+        domain["attempts"].append(attempt_input)
         skill_stats["attempted"] += 1
+        skill_stats["attempts"].append(attempt_input)
 
         if is_correct:
             domain["correct"] += 1
@@ -235,19 +255,32 @@ def build_skill_tree(
     # identifier _load_section_topics hands out and start_practice_session
     # expects — both order by topic name, so the positions line up.
     for position, domain in enumerate(ordered_domains, start=1):
-        skills = [
-            {
-                "name": skill_name,
-                "accuracy": accuracy_percent(stats["correct"], stats["attempted"]),
-                "questions_attempted": stats["attempted"],
-                "questions_correct": stats["correct"],
-                "mastered": is_mastered(stats["correct"], stats["attempted"]),
-            }
-            for skill_name, stats in sorted(
-                domain["skills"].items(),
-                key=lambda item: _skill_sort_key(item[0]),
+        skills = []
+
+        for skill_name, stats in sorted(
+            domain["skills"].items(),
+            key=lambda item: _skill_sort_key(item[0]),
+        ):
+            # A skill is the one granularity with a clean single identity
+            # to calibrate parameters for later (see
+            # mastery_model.get_parameters_for_skill) — domain/topic-level
+            # estimates below blend multiple skills together, so there's
+            # no single skill to key a fitted lookup off.
+            skill_estimate = weighted_mastery_score(
+                stats["attempts"], parameters=get_parameters_for_skill(skill_name)
             )
-        ]
+            skills.append(
+                {
+                    "name": skill_name,
+                    "accuracy": accuracy_percent(stats["correct"], stats["attempted"]),
+                    "questions_attempted": stats["attempted"],
+                    "questions_correct": stats["correct"],
+                    "mastered": skill_estimate.mastered,
+                    "mastery_score": round(skill_estimate.score * 100),
+                }
+            )
+
+        domain_estimate = weighted_mastery_score(domain["attempts"])
 
         tree.append(
             {
@@ -257,7 +290,8 @@ def build_skill_tree(
                 "accuracy": accuracy_percent(domain["correct"], domain["attempted"]),
                 "questions_attempted": domain["attempted"],
                 "questions_correct": domain["correct"],
-                "mastered": is_mastered(domain["correct"], domain["attempted"]),
+                "mastered": domain_estimate.mastered,
+                "mastery_score": round(domain_estimate.score * 100),
                 "skills": skills,
             }
         )
@@ -285,7 +319,13 @@ async def get_section_skill_tree(
     )
 
     attempts_result = await db.execute(
-        select(Question.topic_id, Question.skill, Attempt.is_correct)
+        select(
+            Question.topic_id,
+            Question.skill,
+            Attempt.is_correct,
+            Question.difficulty,
+            Attempt.created_at,
+        )
         .join(Question, Question.id == Attempt.question_id)
         .where(
             Attempt.student_id == student_id,

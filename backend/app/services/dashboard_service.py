@@ -74,7 +74,7 @@ async def _build_weak_topics(
             DashboardWeakTopicResponse(
                 topic_id=topic["topic_id"],
                 display_name=topic["topic_name"],
-                mastery_score=round(topic["accuracy"] * 100, 1),
+                mastery_score=round(topic["mastery_score"] * 100, 1),
                 questions_attempted=topic["attempted"],
                 questions_correct=topic["correct"],
                 section=section_code,

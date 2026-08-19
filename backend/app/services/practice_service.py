@@ -49,6 +49,7 @@ from app.schemas.practice import (
     UpdateAttemptRequest,
     UpdateAttemptResponse,
 )
+from app.services.mastery_model import DEFAULT_PARAMETERS, MODEL_NAME
 from app.services.recommendation_service import generate_study_plan_for_student
 from app.services.skill_scoring_service import (
     MASTERY_ACCURACY_PERCENT,
@@ -301,6 +302,8 @@ async def get_skill_tree(
         mastery_rule=MasteryRuleResponse(
             accuracy=MASTERY_ACCURACY_PERCENT,
             min_questions=MASTERY_MIN_QUESTIONS,
+            model=MODEL_NAME,
+            mastery_threshold=DEFAULT_PARAMETERS.mastery_threshold,
         ),
         domains=[DomainNodeResponse(**domain) for domain in domains],
     )

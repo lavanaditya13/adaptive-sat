@@ -1,16 +1,31 @@
+from datetime import datetime, timezone
+
 import pytest
 from fastapi import HTTPException
 
 from app.models.user import User
 from app.services import practice_service as practice_service_module
+from app.services.mastery_model import DEFAULT_PARAMETERS, MODEL_NAME
 from app.services.skill_scoring_service import (
     MASTERY_ACCURACY_PERCENT,
     MASTERY_MIN_QUESTIONS,
     UNCATEGORIZED_SKILL_NAME,
     build_skill_tree,
     get_section_skill_tree,
-    is_mastered,
 )
+
+# Fixed so attempt fixtures below are reproducible; the mastery model is
+# order-sensitive but doesn't care what "now" is, so an arbitrary instant
+# is fine as long as every attempt in a test uses it (or an offset from
+# it) consistently.
+_NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+
+def _attempt(topic_id: int, skill: str | None, is_correct: bool, difficulty: str = "medium"):
+    """One (topic_id, skill, is_correct, difficulty, created_at) row, the
+    shape get_section_skill_tree's attempts query and build_skill_tree
+    both expect."""
+    return (topic_id, skill, is_correct, difficulty, _NOW)
 
 
 # (topic_id, topic_code, topic_name, skill) — one row per distinct
@@ -67,12 +82,14 @@ def test_untouched_curriculum_still_lists_every_domain_and_skill():
         assert domain["accuracy"] == 0
         assert domain["questions_attempted"] == 0
         assert domain["mastered"] is False
+        assert domain["mastery_score"] == 0
         assert domain["skills"]
 
         for skill in domain["skills"]:
             assert skill["accuracy"] == 0
             assert skill["questions_attempted"] == 0
             assert skill["mastered"] is False
+            assert skill["mastery_score"] == 0
 
 
 def test_domain_topic_id_is_the_position_start_practice_expects():
@@ -89,10 +106,10 @@ def test_domain_topic_id_is_the_position_start_practice_expects():
 
 def test_accuracy_rolls_up_from_skills_to_domains():
     attempts = [
-        (7, "Linear Equations", True),
-        (7, "Linear Equations", True),
-        (7, "Linear Equations", False),
-        (7, "Linear Inequalities", False),
+        _attempt(7, "Linear Equations", True),
+        _attempt(7, "Linear Equations", True),
+        _attempt(7, "Linear Equations", False),
+        _attempt(7, "Linear Inequalities", False),
     ]
 
     tree = build_skill_tree(curriculum_rows=MATH_CURRICULUM, attempt_rows=attempts)
@@ -118,7 +135,7 @@ def test_accuracy_rolls_up_from_skills_to_domains():
 def test_skill_less_questions_collect_under_the_general_bucket():
     """Older seed rows are tagged to a domain but have no skill. They still
     have to show up, or a domain's skill rows won't sum to the domain."""
-    attempts = [(4, None, True), (4, "Quadratics", False)]
+    attempts = [_attempt(4, None, True), _attempt(4, "Quadratics", False)]
 
     tree = build_skill_tree(curriculum_rows=MATH_CURRICULUM, attempt_rows=attempts)
     advanced_math = _domain(tree, "Advanced Math")
@@ -134,40 +151,29 @@ def test_skill_less_questions_collect_under_the_general_bucket():
     assert advanced_math["skills"][-1]["name"] == UNCATEGORIZED_SKILL_NAME
 
 
-def test_mastery_requires_both_accuracy_and_a_minimum_sample():
-    assert (MASTERY_ACCURACY_PERCENT, MASTERY_MIN_QUESTIONS) == (85, 10)
-
-    # A perfect run that's too short doesn't count — the minimum sample is
-    # the whole point of the rule, otherwise one lucky answer reads as 100%.
-    assert is_mastered(correct=9, attempted=9) is False
-
-    # Exactly at both thresholds does.
-    assert is_mastered(correct=85, attempted=100) is True
-    assert is_mastered(correct=9, attempted=10) is True
-
-    # Just under the accuracy threshold doesn't, at any sample size.
-    assert is_mastered(correct=84, attempted=100) is False
-    assert is_mastered(correct=8, attempted=10) is False
-
-    assert is_mastered(correct=0, attempted=0) is False
-
-
 def test_mastered_flag_is_applied_per_node():
-    attempts = [(7, "Linear Equations", True)] * 10 + [(7, "Linear Inequalities", False)] * 10
+    """mastered is driven by the BKT model (mastery_model.py), not a raw
+    accuracy threshold — see test_mastery_model.py for the underlying math.
+    This just checks build_skill_tree wires each node's own attempts into
+    it correctly, independent of its siblings."""
+    attempts = [_attempt(7, "Linear Equations", True) for _ in range(10)] + [
+        _attempt(7, "Linear Inequalities", False) for _ in range(10)
+    ]
 
     tree = build_skill_tree(curriculum_rows=MATH_CURRICULUM, attempt_rows=attempts)
     algebra = _domain(tree, "Algebra")
 
     assert _skill(algebra, "Linear Equations")["mastered"] is True
     assert _skill(algebra, "Linear Inequalities")["mastered"] is False
-    # 50% across the domain, so the domain itself isn't mastered.
+    # A mixed 10-correct/10-incorrect history across the domain isn't
+    # mastered even though one of its two skills individually is.
     assert algebra["mastered"] is False
 
 
 def test_attempts_on_questions_outside_the_catalogue_are_ignored():
     tree = build_skill_tree(
         curriculum_rows=MATH_CURRICULUM,
-        attempt_rows=[(999, "Some Retired Skill", True)],
+        attempt_rows=[_attempt(999, "Some Retired Skill", True)],
     )
 
     assert [domain["name"] for domain in tree] == ["Advanced Math", "Algebra"]
@@ -179,7 +185,12 @@ async def test_get_section_skill_tree_reads_catalogue_then_attempts():
     db = _FakeSession(
         [
             _FakeResult(MATH_CURRICULUM),
-            _FakeResult([(7, "Linear Equations", True), (7, "Linear Equations", True)]),
+            _FakeResult(
+                [
+                    _attempt(7, "Linear Equations", True),
+                    _attempt(7, "Linear Equations", True),
+                ]
+            ),
         ]
     )
 
@@ -202,6 +213,8 @@ async def test_get_skill_tree_wraps_the_tree_with_the_mastery_rule():
     assert response.section_display_name == "Math"
     assert response.mastery_rule.accuracy == MASTERY_ACCURACY_PERCENT
     assert response.mastery_rule.min_questions == MASTERY_MIN_QUESTIONS
+    assert response.mastery_rule.model == MODEL_NAME
+    assert response.mastery_rule.mastery_threshold == DEFAULT_PARAMETERS.mastery_threshold
     assert [domain.name for domain in response.domains] == ["Advanced Math", "Algebra"]
 
 
@@ -210,7 +223,7 @@ async def test_get_skill_tree_serializes_as_camel_case_for_the_client():
     db = _FakeSession(
         [
             _FakeResult([(7, "ALGEBRA", "Algebra", "Linear Equations")]),
-            _FakeResult([(7, "Linear Equations", True)]),
+            _FakeResult([_attempt(7, "Linear Equations", True)]),
         ]
     )
 
@@ -222,7 +235,12 @@ async def test_get_skill_tree_serializes_as_camel_case_for_the_client():
     payload = response.model_dump(by_alias=True)
 
     assert payload["sectionDisplayName"] == "Math"
-    assert payload["masteryRule"] == {"accuracy": 85, "minQuestions": 10}
+    assert payload["masteryRule"] == {
+        "accuracy": 85,
+        "minQuestions": 10,
+        "model": "bayesian_knowledge_tracing",
+        "masteryThreshold": 0.9,
+    }
     assert payload["domains"][0] == {
         "name": "Algebra",
         "topicId": 1,
@@ -231,6 +249,7 @@ async def test_get_skill_tree_serializes_as_camel_case_for_the_client():
         "questionsAttempted": 1,
         "questionsCorrect": 1,
         "mastered": False,
+        "masteryScore": 65,
         "skills": [
             {
                 "name": "Linear Equations",
@@ -238,6 +257,7 @@ async def test_get_skill_tree_serializes_as_camel_case_for_the_client():
                 "questionsAttempted": 1,
                 "questionsCorrect": 1,
                 "mastered": False,
+                "masteryScore": 65,
             }
         ],
     }
