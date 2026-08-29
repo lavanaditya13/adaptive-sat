@@ -82,6 +82,57 @@ async def test_generate_study_plan_prioritizes_weak_topics(student, cleanup_afte
 
 
 @pytest.mark.asyncio
+async def test_generate_study_plan_marks_a_partially_mastered_topic_medium_priority(
+    student, cleanup_after
+):
+    """Covers the "medium" branch: a single correct attempt lands the BKT
+    mastery_score around 0.65 (starting from p_l0=0.3 -- see
+    mastery_model.py), inside [0.5, 0.7). Also a regression case in its own
+    right: 100% raw accuracy on one attempt would have been "low" priority
+    under the old accuracy branching (1.0 is not < 0.7) -- a single lucky
+    guess no longer reads as "no longer needs review."
+    """
+    async with SessionLocal() as db:
+        topic = Topic(code=f"RECS_MEDIUM_{uuid.uuid4().hex[:8]}", name="Recs Medium Topic")
+        db.add(topic)
+        await db.flush()
+        cleanup_after.append((Topic, topic.id))
+
+        question = Question(
+            section="math", prompt=f"Recs Medium Q1 {uuid.uuid4().hex[:8]}", choices=CHOICES,
+            correct_answer="A", difficulty="easy", topic_id=topic.id,
+        )
+        db.add(question)
+        await db.flush()
+
+        session = PracticeSession(
+            student_id=student.id, section_id=1, mode="section", status="completed", question_count=1
+        )
+        db.add(session)
+        await db.flush()
+
+        db.add(
+            Attempt(
+                practice_session_id=session.id,
+                student_id=student.id,
+                question_id=question.id,
+                topic_id=topic.id,
+                selected_answer="A",
+                correct_answer="A",
+                is_correct=True,
+            )
+        )
+        await db.commit()
+
+    async with SessionLocal() as db:
+        plan = await generate_study_plan_for_student(db=db, student_id=student.id)
+
+    item = next(item for item in plan.items if item["topic_id"] == topic.id)
+    assert item["priority"] == "medium"
+    assert item["recommended_questions"] == 15
+
+
+@pytest.mark.asyncio
 async def test_generate_study_plan_ranks_by_mastery_score_not_raw_accuracy(student, cleanup_after):
     """Regression test for the mastery_score switch: a topic with exactly
     50% raw accuracy (one correct attempt, then one wrong one) would have
@@ -196,3 +247,56 @@ async def test_get_or_create_ignores_archived_plans_and_generates_a_new_one(stud
 
     assert plan.id != archived.id
     assert plan.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_generate_study_plan_marks_a_well_mastered_topic_low_priority(student, cleanup_after):
+    """Covers the "low" priority branch: two straight correct attempts push
+    the BKT mastery_score above the 0.7 cutoff (starting from p_l0=0.3, two
+    corrects lands around 0.89 -- see mastery_model.py), so this topic
+    should read as low priority even though it's still, mechanically, the
+    weakest (only) topic the student has attempted.
+    """
+    async with SessionLocal() as db:
+        topic = Topic(code=f"RECS_STRONG_{uuid.uuid4().hex[:8]}", name="Recs Strong Topic")
+        db.add(topic)
+        await db.flush()
+        cleanup_after.append((Topic, topic.id))
+
+        question_one = Question(
+            section="math", prompt=f"Recs Strong Q1 {uuid.uuid4().hex[:8]}", choices=CHOICES,
+            correct_answer="A", difficulty="easy", topic_id=topic.id,
+        )
+        question_two = Question(
+            section="math", prompt=f"Recs Strong Q2 {uuid.uuid4().hex[:8]}", choices=CHOICES,
+            correct_answer="A", difficulty="easy", topic_id=topic.id,
+        )
+        db.add_all([question_one, question_two])
+        await db.flush()
+
+        session = PracticeSession(
+            student_id=student.id, section_id=1, mode="section", status="completed", question_count=2
+        )
+        db.add(session)
+        await db.flush()
+
+        for question in (question_one, question_two):
+            db.add(
+                Attempt(
+                    practice_session_id=session.id,
+                    student_id=student.id,
+                    question_id=question.id,
+                    topic_id=topic.id,
+                    selected_answer="A",
+                    correct_answer="A",
+                    is_correct=True,
+                )
+            )
+        await db.commit()
+
+    async with SessionLocal() as db:
+        plan = await generate_study_plan_for_student(db=db, student_id=student.id)
+
+    item = next(item for item in plan.items if item["topic_id"] == topic.id)
+    assert item["priority"] == "low"
+    assert item["recommended_questions"] == 10
