@@ -1,5 +1,6 @@
 """Tests for app/services/recommendation_service.py."""
 
+import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -300,3 +301,34 @@ async def test_generate_study_plan_marks_a_well_mastered_topic_low_priority(stud
     item = next(item for item in plan.items if item["topic_id"] == topic.id)
     assert item["priority"] == "low"
     assert item["recommended_questions"] == 10
+
+
+@pytest.mark.asyncio
+async def test_concurrent_get_or_create_for_a_student_with_no_plan_yields_valid_plans_for_both(
+    student,
+):
+    """StudyPlan has no uniqueness constraint on (student_id, status) --
+    two concurrent GET /api/v1/study-plan calls for a student who has no
+    active plan yet can both read "none exists" before either commits,
+    same as recommendation_service.generate_study_plan_for_student could
+    already produce more than one active plan per student from two
+    overlapping session completions (pre-existing, not introduced by this
+    read path). This documents that outcome under real concurrency rather
+    than asserting a stronger guarantee this code doesn't provide: both
+    calls must still succeed with a valid plan for the same student, and
+    the next read must consistently pick one of them (not error, not
+    return an empty/malformed plan).
+    """
+    async def _get_or_create() -> StudyPlan:
+        async with SessionLocal() as db:
+            return await get_or_create_study_plan_for_student(db=db, student_id=student.id)
+
+    results = await asyncio.gather(_get_or_create(), _get_or_create())
+
+    for plan in results:
+        assert plan.student_id == student.id
+        assert plan.status == "active"
+
+    async with SessionLocal() as db:
+        stable_read = await get_or_create_study_plan_for_student(db=db, student_id=student.id)
+    assert stable_read.id in {plan.id for plan in results}
