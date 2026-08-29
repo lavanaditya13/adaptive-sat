@@ -1,6 +1,7 @@
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from app.core.constants import STUDY_PLAN_STATUS_ACTIVE
 from app.models.study_plan import StudyPlan
 from app.repositories.base import BaseRepository
 
@@ -27,7 +28,10 @@ class StudyPlanRepository(BaseRepository[StudyPlan]):
         """
         query = (
             select(StudyPlan)
-            .where(StudyPlan.student_id == student_id, StudyPlan.status == "active")
+            .where(
+                StudyPlan.student_id == student_id,
+                StudyPlan.status == STUDY_PLAN_STATUS_ACTIVE,
+            )
             .order_by(StudyPlan.created_at.desc(), StudyPlan.id.desc())
             .limit(1)
         )
