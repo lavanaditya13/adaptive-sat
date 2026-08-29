@@ -45,6 +45,7 @@ from app.schemas.practice import (
 )
 from app.services import practice_service, skill_scoring_service
 from app.services.idempotency_service import compute_request_fingerprint, run_idempotent
+from app.services.recommendation_service import get_or_create_study_plan_for_student
 
 MATH_SECTION_ID = 1
 WEAK_TOPIC_CODE = "REGR_WEAK_TOPIC"
@@ -292,6 +293,38 @@ async def test_complete_session_generates_study_plan_from_weakest_topics(student
     weak_item = next(item for item in plans[0].items if item["topic_id"] == seeded_questions["weak_topic_id"])
     assert weak_item["priority"] == "high"
     assert weak_item["recommended_questions"] == 20
+
+
+@pytest.mark.asyncio
+async def test_get_study_plan_reads_back_the_plan_session_completion_wrote(student, seeded_questions):
+    """Closes the "StudyPlan is write-only" gap: completing a session writes
+    a StudyPlan as a side effect (see the test above), but until GET
+    /api/v1/study-plan existed there was no way to read one back. This
+    proves get_or_create_study_plan_for_student (the endpoint's service
+    call) returns that exact same row rather than silently generating a
+    second, duplicate plan on every read.
+    """
+    await _select_math_section(student)
+
+    await _run_full_section_session(
+        student, wrong_prompts=frozenset(seeded_questions["weak_prompts"])
+    )
+
+    async with SessionLocal() as db:
+        written_plan = (
+            await db.execute(select(StudyPlan).where(StudyPlan.student_id == student.id))
+        ).scalar_one()
+
+    async with SessionLocal() as db:
+        read_plan = await get_or_create_study_plan_for_student(db=db, student_id=student.id)
+
+    assert read_plan.id == written_plan.id
+
+    async with SessionLocal() as db:
+        plans_after_read = (
+            await db.execute(select(StudyPlan).where(StudyPlan.student_id == student.id))
+        ).scalars().all()
+    assert len(plans_after_read) == 1
 
 
 @pytest.mark.asyncio
