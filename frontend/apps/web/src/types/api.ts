@@ -174,6 +174,35 @@ interface ApiErrorResponse {
   [key: string]: unknown;
 }
 
+/**
+ * One recommended topic within a StudyPlan. `topic_id` is null only for the
+ * synthetic "Mixed Practice" item a brand-new student (no attempts yet) gets
+ * back instead of an empty plan -- see recommendation_service.py.
+ */
+interface StudyPlanItem {
+  topic_id: number | null;
+  topic_name: string;
+  priority: 'high' | 'medium' | 'low';
+  recommended_questions: number;
+  /** Templated string, not LLM-generated -- see StudyPlan feature scope. */
+  reason: string;
+}
+
+/* GET/POST /api/v1/study-plan. `items` is the backend's `list[dict]` JSONB
+   column typed as an untagged `list[dict[str, Any]]` in the schema
+   (StudyPlanResponse), so this narrows it to the shape
+   generate_study_plan_for_student actually writes rather than trusting an
+   open dict. */
+interface StudyPlanResponse {
+  id: number;
+  student_id: number;
+  title: string | null;
+  status: string;
+  items: StudyPlanItem[];
+  created_at: string;
+  updated_at: string;
+}
+
 /* Domain -> skill accuracy tree backing the practice drill-down
    (GET /api/v1/practice/skill-tree?section=...). Responds in camelCase. */
 interface SkillTreeSkill {
@@ -224,4 +253,6 @@ export type {
   SkillTreeSkill,
   SkillTreeDomain,
   SkillTreeResponse,
+  StudyPlanItem,
+  StudyPlanResponse,
 };
