@@ -43,4 +43,10 @@ export const API = {
     UNLINK_PROVIDER: (provider: 'google') =>
       `/api/v1/settings/connected-providers/${provider}`,
   },
+  STUDY_PLAN: {
+    /* Returns the student's current active plan, generating one on the fly
+       if they don't have one yet -- see app/api/v1/endpoints/study_plan.py. */
+    GET: '/api/v1/study-plan',
+    REGENERATE: '/api/v1/study-plan/regenerate',
+  },
 } as const;

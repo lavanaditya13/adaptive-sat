@@ -6,9 +6,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DashboardPage } from './DashboardPage';
 import { getDashboard } from '@/services/dashboard-service';
 import { selectSection, startPractice } from '@/services/practice-service';
+import { getStudyPlan, regenerateStudyPlan } from '@/services/study-plan-service';
 import { useAppShellStore } from '@/store/app-shell-store';
 import { useAuthStore } from '@/store/auth-store';
-import { MOCK_DASHBOARD } from '@/mocks/mock-data';
+import { MOCK_DASHBOARD, MOCK_STUDY_PLAN } from '@/mocks/mock-data';
 import type { DashboardResponse } from '@/types/api';
 
 vi.mock('@/services/dashboard-service', () => ({
@@ -18,6 +19,11 @@ vi.mock('@/services/dashboard-service', () => ({
 vi.mock('@/services/practice-service', () => ({
   selectSection: vi.fn(),
   startPractice: vi.fn(),
+}));
+
+vi.mock('@/services/study-plan-service', () => ({
+  getStudyPlan: vi.fn(),
+  regenerateStudyPlan: vi.fn(),
 }));
 
 function renderPage() {
@@ -42,6 +48,9 @@ describe('DashboardPage', () => {
     vi.mocked(selectSection).mockReset();
     vi.mocked(selectSection).mockResolvedValue({ practice_options: [], topics: [] });
     vi.mocked(startPractice).mockReset();
+    vi.mocked(getStudyPlan).mockReset();
+    vi.mocked(getStudyPlan).mockResolvedValue(MOCK_STUDY_PLAN);
+    vi.mocked(regenerateStudyPlan).mockReset();
     useAuthStore.setState({
       user: {
         user_id: 1,
@@ -156,6 +165,42 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByText('Hey, Alex 👋')).toBeInTheDocument();
     expect(screen.queryByText('Focus areas')).not.toBeInTheDocument();
+  });
+
+  it('renders the study plan returned by the API', async () => {
+    vi.mocked(getDashboard).mockResolvedValue(MOCK_DASHBOARD);
+
+    renderPage();
+
+    expect(await screen.findByText('Study plan')).toBeInTheDocument();
+    // The topic name (Algebra) also appears in the weak-topics card above, so
+    // assert on the reason string, which only the study plan card renders.
+    expect(screen.getByText(MOCK_STUDY_PLAN.items[0].reason)).toBeInTheDocument();
+  });
+
+  it('regenerates the study plan and swaps in the fresh result', async () => {
+    vi.mocked(getDashboard).mockResolvedValue(MOCK_DASHBOARD);
+    const regenerated = {
+      ...MOCK_STUDY_PLAN,
+      items: [
+        {
+          topic_id: 55,
+          topic_name: 'Freshly Regenerated Topic',
+          priority: 'high' as const,
+          recommended_questions: 20,
+          reason: 'Mastery score is 10%, so this topic should be reviewed.',
+        },
+      ],
+    };
+    vi.mocked(regenerateStudyPlan).mockResolvedValue(regenerated);
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Regenerate' }));
+
+    expect(regenerateStudyPlan).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('Freshly Regenerated Topic')).toBeInTheDocument();
   });
 
   it('shows a retryable error instead of dashboard content when the query fails', async () => {

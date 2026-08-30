@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { ChartNoAxesColumn, Check, Flame, TrendingUp } from 'lucide-react';
 import { Button } from '@workspace/ui/components/button';
@@ -9,6 +9,8 @@ import { EmailVerificationBanner } from '@/components/dashboard/EmailVerificatio
 import { EstimatedScoreCard } from '@/components/dashboard/EstimatedScoreCard/EstimatedScoreCard';
 import { SectionCard } from '@/components/dashboard/SectionCard/SectionCard';
 import { StatCard } from '@/components/dashboard/StatCard/StatCard';
+import { StudyPlanCard } from '@/components/dashboard/StudyPlanCard/StudyPlanCard';
+import { REGENERATE_ERROR_MESSAGE } from '@/components/dashboard/StudyPlanCard/StudyPlanCard.constants';
 import { WeakTopicsCard } from '@/components/dashboard/WeakTopicsCard/WeakTopicsCard';
 import {
   SESSION_CONFLICT_MESSAGE,
@@ -18,6 +20,7 @@ import { queryKeys } from '@/constants/query-keys';
 import { practicePath } from '@/constants/routes';
 import { getDashboard } from '@/services/dashboard-service';
 import { selectSection, startPractice } from '@/services/practice-service';
+import { getStudyPlan, regenerateStudyPlan } from '@/services/study-plan-service';
 import { useAppShellStore } from '@/store/app-shell-store';
 import { useAuthStore } from '@/store/auth-store';
 import { getApiErrorDetail } from '@/utils/api-errors';
@@ -65,8 +68,10 @@ import {
   SKELETON_SECTION_CARD_STYLES,
   SKELETON_SECTION_LABEL_STYLES,
   SKELETON_STAT_STYLES,
+  SKELETON_STUDY_PLAN_STYLES,
   SKELETON_WEAK_TOPICS_STYLES,
   STATS_GRID_STYLES,
+  STUDY_PLAN_BLOCK_STYLES,
   WEAK_TOPICS_BLOCK_STYLES,
 } from './DashboardPage.styles';
 
@@ -84,6 +89,7 @@ function resolveFirstName(user: User | null, dashboardFullName: string): string 
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const showToast = useAppShellStore((state) => state.showToast);
   const [startingTopicId, setStartingTopicId] = useState<number | null>(null);
@@ -96,6 +102,21 @@ export function DashboardPage() {
   } = useQuery({
     queryKey: queryKeys.dashboard.all,
     queryFn: getDashboard,
+  });
+
+  const { data: studyPlan, isLoading: isStudyPlanLoading } = useQuery({
+    queryKey: queryKeys.studyPlan.all,
+    queryFn: getStudyPlan,
+  });
+
+  const regenerateStudyPlanMutation = useMutation({
+    mutationFn: regenerateStudyPlan,
+    onSuccess: (plan) => {
+      queryClient.setQueryData(queryKeys.studyPlan.all, plan);
+    },
+    onError: (err) => {
+      showToast(getApiErrorDetail(err) || REGENERATE_ERROR_MESSAGE);
+    },
   });
 
   const handleSelectSection = (section: DashboardSection) => {
@@ -145,6 +166,7 @@ export function DashboardPage() {
         </div>
         <Skeleton className={SKELETON_SCORE_STYLES} />
         <Skeleton className={SKELETON_WEAK_TOPICS_STYLES} />
+        <Skeleton className={SKELETON_STUDY_PLAN_STYLES} />
         <Skeleton className={SKELETON_SECTION_LABEL_STYLES} />
         <div className={SECTIONS_GRID_STYLES}>
           <Skeleton className={SKELETON_SECTION_CARD_STYLES} />
@@ -242,6 +264,20 @@ export function DashboardPage() {
             startingTopicId={startingTopicId}
           />
         </div>
+      )}
+
+      {isStudyPlanLoading ? (
+        <Skeleton className={SKELETON_STUDY_PLAN_STYLES} />
+      ) : (
+        studyPlan && (
+          <div className={STUDY_PLAN_BLOCK_STYLES}>
+            <StudyPlanCard
+              plan={studyPlan}
+              onRegenerate={() => regenerateStudyPlanMutation.mutate()}
+              isRegenerating={regenerateStudyPlanMutation.isPending}
+            />
+          </div>
+        )
       )}
 
       <p className={SECTION_LABEL_STYLES}>{SECTIONS_TITLE}</p>

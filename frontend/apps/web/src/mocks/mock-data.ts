@@ -7,6 +7,7 @@ import type {
   AnswerResponse,
   QuestionResponse,
   CompleteResponse,
+  StudyPlanResponse,
 } from '@/types/api';
 
 export const MOCK_USER: User = {
@@ -257,4 +258,36 @@ export const MOCK_COMPLETE_RESPONSE: CompleteResponse = {
       time_spent_seconds: 35,
     },
   ],
+};
+
+export const MOCK_STUDY_PLAN: StudyPlanResponse = {
+  id: 1,
+  student_id: 1,
+  title: 'Recommended Study Plan',
+  status: 'active',
+  items: [
+    {
+      topic_id: 14,
+      topic_name: 'Algebra',
+      priority: 'high',
+      recommended_questions: 20,
+      reason: 'Mastery score is 32%, so this topic should be reviewed.',
+    },
+    {
+      topic_id: 21,
+      topic_name: 'Problem-Solving and Data Analysis',
+      priority: 'medium',
+      recommended_questions: 15,
+      reason: 'Mastery score is 58%, so this topic should be reviewed.',
+    },
+    {
+      topic_id: 33,
+      topic_name: 'Craft and Structure',
+      priority: 'low',
+      recommended_questions: 10,
+      reason: 'Mastery score is 76%, so this topic should be reviewed.',
+    },
+  ],
+  created_at: '2026-08-20T09:00:00Z',
+  updated_at: '2026-08-20T09:00:00Z',
 };

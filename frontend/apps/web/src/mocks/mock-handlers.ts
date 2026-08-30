@@ -8,6 +8,7 @@ import {
   // MOCK_ANSWER_RESPONSE,
   // MOCK_QUESTION_RESPONSE,
   MOCK_COMPLETE_RESPONSE,
+  MOCK_STUDY_PLAN,
 } from './mock-data';
 import type {
   User,
@@ -19,6 +20,7 @@ import type {
   AbandonResponse,
   QuestionResponse,
   CompleteResponse,
+  StudyPlanResponse,
 } from '@/types/api';
 
 let activeQuestionIndex = 0;
@@ -94,5 +96,13 @@ export const mockHandlers = {
 
   unlinkProvider: async (_provider: 'google'): Promise<void> => {
     return;
+  },
+
+  getStudyPlan: async (): Promise<StudyPlanResponse> => {
+    return MOCK_STUDY_PLAN;
+  },
+
+  regenerateStudyPlan: async (): Promise<StudyPlanResponse> => {
+    return MOCK_STUDY_PLAN;
   },
 };

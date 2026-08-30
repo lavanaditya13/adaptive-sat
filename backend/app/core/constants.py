@@ -78,6 +78,15 @@ ADAPTIVE_MODE_LOCKED_DETAIL = (
     "Complete more section practice sessions before starting adaptive practice."
 )
 
+# --- StudyPlan.status ---------------------------------------------------------
+# No enum/CHECK constraint yet (unlike PracticeSessionStatus above) --
+# StudyPlan only has one status any code writes today ("active"); adding a
+# full enum for a single-member set with no other values in use anywhere
+# would be premature. This constant exists so the one value that IS
+# compared/written in two places (recommendation_service's generate, and
+# the repository's get_latest_active_by_student) is spelled once.
+STUDY_PLAN_STATUS_ACTIVE = "active"
+
 # --- Section codes -----------------------------------------------------------
 # Same two values as sections.name / practice_service.SECTION_CODES, but that
 # dict is keyed by sections.id and lives in practice_service (importing it
