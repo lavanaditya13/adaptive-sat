@@ -15,4 +15,7 @@ export const queryKeys = {
     skillTree: (section: string) => ['practice', 'skill-tree', section] as const,
     latestResult: ['practice', 'latest-result'] as const,
   },
+  studyPlan: {
+    all: ['study-plan'] as const,
+  },
 } as const;
