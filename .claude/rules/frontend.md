@@ -15,7 +15,7 @@ npm run format        # turbo format (prettier, with prettier-plugin-tailwindcss
 
 These fan out through Turborepo to every workspace (`apps/web`, `packages/ui`). To target just `apps/web`, `cd frontend/apps/web` and run the same script names directly (e.g. `npm run dev`, `npm run build` which runs `tsc -b && vite build`).
 
-Add a new shadcn/ui component (places files in `packages/ui/src/components`, run from `frontend/`):
+**shadcn/ui is deprecated for new work** (2026-08-23) — do not add new shadcn components. Use the `ui-ux-pro-max` skill (global, `~/.claude/skills/ui-ux-pro-max`) for UI/UX guidance instead. Existing components in `packages/ui` stay as-is; the command below is kept for reference only:
 
 ```bash
 pnpm dlx shadcn@latest add button -c apps/web
