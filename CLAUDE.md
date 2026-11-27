@@ -8,6 +8,7 @@ Adaptive SAT: students practice questions, the backend scores mistakes and deriv
 
 - `backend/` — FastAPI + SQLAlchemy 2.0 (async) + Alembic + PostgreSQL, deployed as a serverless function at `/api/*`. Commands, request-flow architecture, and the practice domain model: `.claude/rules/backend.md`.
 - `frontend/` — npm-workspaces/Turborepo monorepo: Vite + React 19 SPA (`apps/web`) + shared shadcn/ui package (`packages/ui`), deployed as the static site serving everything else. Commands and source structure: `.claude/rules/frontend.md`.
+  **shadcn/ui is deprecated for new work** (2026-08-23): existing components in `packages/ui` stay as-is, but don't add new shadcn components. Use the `ui-ux-pro-max` skill (global, `~/.claude/skills/ui-ux-pro-max`) for UI/UX guidance going forward.
 
 Both halves deploy together as one Vercel project (root `vercel.json`) on one domain, so the deployed frontend calls the backend via same-origin relative paths — no CORS, and every branch push gets one preview URL with a matched frontend+backend pair.
 

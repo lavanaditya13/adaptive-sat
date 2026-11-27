@@ -2,3 +2,4 @@ node_modules
 .dev-logs/
 .vercel
 .env*
+.turbo/
